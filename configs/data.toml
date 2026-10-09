@@ -1,0 +1,24 @@
+# Raw data sources for the MineThatData e-mail experiment (Hillstrom, 2008).
+# Sources are tried in order. A downloaded file is accepted only if its checksum matches.
+# Verification details: docs/design.md, Sections 1.1 and 1.11.
+
+[dataset]
+name = "MineThatData E-Mail Analytics and Data Mining Challenge (2008)"
+citation = "Hillstrom, K. (2008, March 20). The MineThatData E-Mail Analytics and Data Mining Challenge. MineThatData blog."
+documentation_url = "https://blog.minethatdata.com/2008/03/minethatdata-e-mail-analytics-and-data.html"
+expected_rows = 64000
+raw_filename = "hillstrom_2008.csv"
+
+[[sources]]
+name = "minethatdata_original"
+url = "http://www.minethatdata.com/Kevin_Hillstrom_MineThatData_E-MailAnalytics_DataMiningChallenge_2008.03.20.csv"
+compression = "none"
+sha256 = "0e5893329d8b93cefecc571777672028290ab69865718020c78c7284f291aece"
+
+[[sources]]
+# Numerically identical to the original on all 64,000 rows; differs only in text formatting.
+name = "scikit_uplift_mirror"
+url = "https://hillstorm1.s3.us-east-2.amazonaws.com/hillstorm_no_indices.csv.gz"
+compression = "gzip"
+sha256_compressed = "bab6578f60db5d792f1c2372c502f029152a5249cf5ea84390f3b7f885d7234f"
+sha256 = "00a6a868e05a9ffe7382da51629f6d6dce88c5acfc945e79d314ebc78fd3a2c0"

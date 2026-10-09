@@ -17,9 +17,21 @@ import io
 import math
 import statistics
 import sys
+from pathlib import Path
 
 COVARIATES = ["recency", "history_segment", "history", "mens", "womens", "zip_code", "newbie", "channel"]
-CATEGORICAL = ["recency", "history_segment", "mens", "womens", "zip_code", "newbie", "channel", "segment", "visit", "conversion"]
+CATEGORICAL = [
+    "recency",
+    "history_segment",
+    "mens",
+    "womens",
+    "zip_code",
+    "newbie",
+    "channel",
+    "segment",
+    "visit",
+    "conversion",
+]
 SEGMENT_BOUNDS = {
     "1) $0 - $100": (0, 100),
     "2) $100 - $200": (100, 200),
@@ -40,7 +52,7 @@ def parse(raw: bytes) -> tuple[list[str], list[list[str]]]:
 
 
 def numerically_equal(a: list[str], b: list[str]) -> bool:
-    for x, y in zip(a, b):
+    for x, y in zip(a, b, strict=True):
         if x == y:
             continue
         try:
@@ -57,7 +69,9 @@ def smd(treated: list[float], control: list[float]) -> float:
 
 
 def diff_se(treated: list[float], control: list[float]) -> float:
-    return math.sqrt(statistics.variance(treated) / len(treated) + statistics.variance(control) / len(control))
+    return math.sqrt(
+        statistics.variance(treated) / len(treated) + statistics.variance(control) / len(control)
+    )
 
 
 def section(title: str) -> None:
@@ -65,7 +79,7 @@ def section(title: str) -> None:
 
 
 def main(orig_path: str, mirror_path: str | None) -> None:
-    raw = open(orig_path, "rb").read()
+    raw = Path(orig_path).read_bytes()
     header, rows = parse(raw)
     col = {c: i for i, c in enumerate(header)}
     get = lambda r, c: r[col[c]]  # noqa: E731
@@ -78,12 +92,15 @@ def main(orig_path: str, mirror_path: str | None) -> None:
 
     if mirror_path:
         section("Mirror comparison")
-        packed = open(mirror_path, "rb").read()
+        packed = Path(mirror_path).read_bytes()
         print("mirror md5 (compressed):", hashlib.md5(packed).hexdigest())
         m_header, m_rows = parse(gzip.decompress(packed))
         print("headers equal:", m_header == header, "| mirror rows:", len(m_rows))
-        print("rows identical as text:", sum(a == b for a, b in zip(rows, m_rows)))
-        print("rows numerically identical:", sum(numerically_equal(a, b) for a, b in zip(rows, m_rows)))
+        print("rows identical as text:", sum(a == b for a, b in zip(rows, m_rows, strict=True)))
+        print(
+            "rows numerically identical:",
+            sum(numerically_equal(a, b) for a, b in zip(rows, m_rows, strict=True)),
+        )
 
     section("Missingness")
     for c in header:
@@ -102,25 +119,54 @@ def main(orig_path: str, mirror_path: str | None) -> None:
     history_counts = collections.Counter(get(r, "history") for r in rows)
     print("distinct history values:", len(history_counts), "| most common:", history_counts.most_common(3))
     spend_conv = [float(get(r, "spend")) for r in rows if get(r, "conversion") == "1"]
-    print("spend | conversion: min", min(spend_conv), "| n == 29.99:", sum(s == 29.99 for s in spend_conv),
-          "| n == 499.0:", sum(s == 499.0 for s in spend_conv), "| n > 499:", sum(s > 499 for s in spend_conv))
+    print(
+        "spend | conversion: min",
+        min(spend_conv),
+        "| n == 29.99:",
+        sum(s == 29.99 for s in spend_conv),
+        "| n == 499.0:",
+        sum(s == 499.0 for s in spend_conv),
+        "| n > 499:",
+        sum(s > 499 for s in spend_conv),
+    )
 
     section("Duplicates")
     full = collections.Counter(tuple(r) for r in rows)
     dup_groups = {k: c for k, c in full.items() if c > 1}
     print("exact-duplicate rows beyond first copy:", sum(c - 1 for c in dup_groups.values()))
-    print("rows in duplicate groups:", sum(dup_groups.values()),
-          "| of which history == 29.99:", sum(c for k, c in dup_groups.items() if k[col["history"]] == "29.99"))
-    print("duplicate groups containing a conversion:", sum(1 for k in dup_groups if k[col["conversion"]] == "1"))
+    print(
+        "rows in duplicate groups:",
+        sum(dup_groups.values()),
+        "| of which history == 29.99:",
+        sum(c for k, c in dup_groups.items() if k[col["history"]] == "29.99"),
+    )
+    print(
+        "duplicate groups containing a conversion:", sum(1 for k in dup_groups if k[col["conversion"]] == "1")
+    )
 
     section("Logical consistency")
-    print("conversion=1 & visit=0:", sum(1 for r in rows if get(r, "conversion") == "1" and get(r, "visit") == "0"))
-    print("conversion=1 & spend=0:", sum(1 for r in rows if get(r, "conversion") == "1" and float(get(r, "spend")) == 0))
-    print("conversion=0 & spend>0:", sum(1 for r in rows if get(r, "conversion") == "0" and float(get(r, "spend")) > 0))
+    print(
+        "conversion=1 & visit=0:",
+        sum(1 for r in rows if get(r, "conversion") == "1" and get(r, "visit") == "0"),
+    )
+    print(
+        "conversion=1 & spend=0:",
+        sum(1 for r in rows if get(r, "conversion") == "1" and float(get(r, "spend")) == 0),
+    )
+    print(
+        "conversion=0 & spend>0:",
+        sum(1 for r in rows if get(r, "conversion") == "0" and float(get(r, "spend")) > 0),
+    )
     print("mens=0 & womens=0:", sum(1 for r in rows if get(r, "mens") == "0" and get(r, "womens") == "0"))
-    outside = sum(1 for r in rows if not (SEGMENT_BOUNDS[get(r, "history_segment")][0]
-                                          <= float(get(r, "history"))
-                                          <= SEGMENT_BOUNDS[get(r, "history_segment")][1]))
+    outside = sum(
+        1
+        for r in rows
+        if not (
+            SEGMENT_BOUNDS[get(r, "history_segment")][0]
+            <= float(get(r, "history"))
+            <= SEGMENT_BOUNDS[get(r, "history_segment")][1]
+        )
+    )
     print("history outside its history_segment bounds:", outside)
 
     section("Randomization")
@@ -156,7 +202,9 @@ def main(orig_path: str, mirror_path: str | None) -> None:
     section("Minimum detectable effects (80% power, alpha=0.05, two-sided)")
     for outcome in ["spend", "visit", "conversion"]:
         for arm in EMAIL_ARMS:
-            se = diff_se([float(get(r, outcome)) for r in arms[arm]], [float(get(r, outcome)) for r in control])
+            se = diff_se(
+                [float(get(r, outcome)) for r in arms[arm]], [float(get(r, outcome)) for r in control]
+            )
             print(f"{outcome:10s} {arm:13s} SE={se:.5f} MDE={Z_POWER * se:.5f}")
     print("spend MDE by subgroup, Mens E-Mail vs No E-Mail:")
     for key in ["history_segment", "channel", "zip_code", "newbie"]:
@@ -165,7 +213,10 @@ def main(orig_path: str, mirror_path: str | None) -> None:
             c = [r for r in control if get(r, key) == level]
             se = diff_se([float(get(r, "spend")) for r in t], [float(get(r, "spend")) for r in c])
             conversions = sum(int(get(r, "conversion")) for r in t + c)
-            print(f"  {key}={level:18s} n={len(t) + len(c):6d} conversions={conversions:4d} MDE={Z_POWER * se:.3f}")
+            print(
+                f"  {key}={level:18s} n={len(t) + len(c):6d} "
+                f"conversions={conversions:4d} MDE={Z_POWER * se:.3f}"
+            )
 
 
 if __name__ == "__main__":

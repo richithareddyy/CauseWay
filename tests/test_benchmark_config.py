@@ -53,7 +53,9 @@ def test_scenarios(spec):
     scenarios = spec["scenarios"]
     assert scenarios["A"]["selection_strength_k"] == 1.0 and scenarios["A"]["hidden_covariates"] == []
     assert scenarios["B"]["selection_strength_k"] == 2.0 and scenarios["B"]["hidden_covariates"] == []
-    assert scenarios["C"]["selection_strength_k"] == 1.0 and scenarios["C"]["hidden_covariates"] == ["recency"]
+    assert scenarios["C"]["selection_strength_k"] == 1.0 and scenarios["C"]["hidden_covariates"] == [
+        "recency"
+    ]
     # The hidden covariate must be one that drives selection, otherwise Scenario C hides nothing.
     assert set(scenarios["C"]["hidden_covariates"]) <= set(spec["selection"]["selection_covariates"])
 

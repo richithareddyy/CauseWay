@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "causeway"
+version = "0.2.0"
+description = "Causal analysis of the randomized MineThatData e-mail experiment, with a constructed observational benchmark."
+readme = "README.md"
+authors = [{ name = "Richitha Rekula" }]
+requires-python = ">=3.12,<3.13"
+# Direct dependencies only; requirements.txt is the fully pinned lock used for reproduction and CI.
+dependencies = [
+    "numpy>=2.0,<2.5",
+    "pandas>=2.2,<4",
+    "pyarrow>=15",                     # typed parquet storage of the processed dataset
+    "scipy==1.15.3",                   # DoWhy 0.14 requires scipy<=1.15.3 on Python 3.12
+    "statsmodels>=0.14.4,<0.16",
+    "scikit-learn>=1.6,<1.10",         # EconML 0.17 requires scikit-learn<1.10
+    "dowhy==0.14",
+    "econml==0.17.0",
+    "doubleml==0.11.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+causeway = "causeway.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]

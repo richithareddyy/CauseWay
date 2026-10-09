@@ -1,0 +1,35 @@
+# Data is downloaded at build time (`make data`), never versioned
+data/raw/*
+data/interim/*
+data/processed/*
+!data/**/.gitkeep
+
+# Generated analysis outputs
+reports/figures/*
+reports/results/*
+!reports/**/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Notebooks and editors
+.ipynb_checkpoints/
+.DS_Store
+.vscode/
+.idea/
+
+# Local environment and secrets
+.env
+.env.*
+*.pem

@@ -1,6 +1,6 @@
 # Causeway — Milestone 1: Dataset Verification and Causal Design
 
-**Status:** design for review. No estimators have been implemented. Every number in Section 1 is printed by `scripts/audit_raw_data.py`, run on the original source file.
+**Status:** Milestone 1 approved on 2026-10-09. The decisions from that review are in Section 5, and the observational benchmark is frozen as v1 (Section 6). No estimators have been implemented. Every number in Section 1 is printed by `scripts/audit_raw_data.py`, run on the original source file.
 
 **Disclosure on pre-specification.** The integrity audit computed outcome rates by arm (Section 1.11) to confirm the file is internally coherent, and the power calculations in Section 2.13 use outcome variances. This design is therefore *not* blind to the arm-level means. The choices below are made so that they do not exploit that knowledge: both e-mail arms are analysed as co-primary contrasts, the benchmark selection mechanism uses covariates only, and every robustness specification is listed here before any of them is run.
 
@@ -76,7 +76,8 @@ The covariates describe the twelve months before the campaign; the outcomes cove
 - **Missing values:** none in any column (empty, `NA`, `NaN` and `NULL` were all checked).
 - **Exact duplicate rows:** 6,562 rows beyond a first copy (7,634 rows in 1,072 duplicate groups). 7,570 of those 7,634 rows have `history` = 29.99, and no duplicate group contains a conversion. These are customers with coarse, identical covariate profiles and zero outcomes, which is expected when one-eighth of the file sits at a single `history` value. They are **not** evidence of duplicated records, and they will not be removed. The validation log will report them.
 - **`history` = 29.99:** 7,947 customers (12.4%). The file gives no lower values, so this is plausibly a single-item minimum price or a floor in how history was recorded. That cannot be determined from the source.
-- **`spend` among converters:** the minimum is 29.99 (136 of 578 converters, 23.5%) and the maximum is 499.00 (12 converters, none above). A ceiling at exactly 499.00 is consistent with top-coding, but the source does not say so. Section 2.12 lists a sensitivity analysis for this.
+- **`spend` among converters:** the minimum is 29.99 (136 of 578 converters, 23.5%) and the maximum is 499.00 (12 converters, none above). *Observed maximum of $499; whether this reflects a true maximum or data-generation constraint is unknown.* It is recorded as a boundary anomaly, not as a cap. Milestone 3 EDA inspects the upper tail, the frequency near the boundary, clustering just below $499, and the arm distribution of those observations. Section 2.12 lists a sensitivity analysis.
+- **Duplicate policy:** the primary dataset is all 64,000 rows. Identical observed features do not establish duplicate customers when no identifier exists, so no row is removed on that basis. A with/without-duplicates sensitivity analysis may be reported, but it will never replace the primary dataset without stronger evidence.
 - **Logical consistency:** every converter also visited (0 cases of `conversion`=1 with `visit`=0). `spend` > 0 if and only if `conversion` = 1. This pattern suggests that conversion was measured on website-linked purchases, but the source does not say whether phone or other-channel purchases are counted.
 - **Category spelling:** `Surburban` will be recoded to `Suburban` as a logged transformation.
 
@@ -262,7 +263,7 @@ Matching estimates are compared with the ATT benchmark, and IPW, AIPW, DML and r
 
 1. **External validity and age:** a single retailer, a single campaign, 2008 e-mail behaviour and an unknown season.
 2. **Treatment definition:** ITT on assignment only, with no delivery or open data. A per-protocol effect is not identifiable.
-3. **Outcome measurement:** conversion may cover only website purchases (every converter visited). Spend may be top-coded at 499.00. There is no margin or cost data, so policy values are in incremental *revenue*, not profit.
+3. **Outcome measurement:** conversion may cover only website purchases (every converter visited). Spend has an observed maximum of exactly 499.00, and whether this is a true maximum or a data-generation constraint is unknown. There is no margin or cost data, so policy values are in incremental *revenue*, not profit.
 4. **Heavy-tailed, sparse outcome:** only 578 converters. The planned robustness checks are winsorized spend, a fit excluding the twelve 499.00 values, conversion as an alternative outcome, and bootstrap BCa intervals.
 5. **Subgroup power:** the minimum detectable spend effect (80% power) for the overall Mens contrast is $0.41, but within pre-specified subgroups it ranges from $0.52 (`newbie` = 1) to $5.41 (`history_segment` = $1,000+). Most subgroup spend effects cannot be distinguished from zero or from each other. For `visit` the overall MDE is ≈ 0.009, far better powered. This is why the heterogeneity analysis leads with a formal test, and why subgroup claims will be labelled exploratory unless they survive multiplicity control.
 6. **Multiplicity:** Holm correction across the two co-primary contrasts. Segment-level results carry Benjamini–Hochberg-adjusted q-values and are labelled exploratory.
@@ -320,7 +321,51 @@ The project succeeds if it **measures and communicates causal evidence correctly
 
 ---
 
-## 5. References
+## 5. Decisions approved at Milestone 1 review (2026-10-09)
+
+1. **Co-primary contrasts:** Mens E-Mail vs No E-Mail and Womens E-Mail vs No E-Mail, with the Holm procedure across the two. Neither arm is singled out as primary. The estimand is always stated as the *intention-to-treat effect of assignment to the e-mail campaign*. It is never described as the effect of receiving, opening, or reading an e-mail.
+2. **Outcome hierarchy is fixed:** `spend` is primary, and `visit` and `conversion` are secondary. It will not change after estimator results are seen.
+3. **Environment:** Python 3.12 is used for development, the virtual environment, the dependency lock, tests and CI.
+4. **Duplicates:** all 64,000 rows are kept (Section 1.9).
+5. **$499 boundary:** described as an observed maximum of unknown origin (Section 1.9).
+6. **Part II framing:** the narrative runs randomization → observed confounding → adjustment → recovery → hidden confounding → failure/sensitivity.
+   - Part I asks what causal effect the randomized experiment estimates.
+   - Part II asks how well common observational estimators recover the appropriate experimental benchmark when observed confounding is deliberately created.
+   - Scenario C asks what happens when an important confounder exists but is hidden from the estimator.
+
+   Part II is not evidence that these methods remove confounding in arbitrary real-world observational data.
+7. **Heterogeneity:** the formal heterogeneity test comes first. Subgroup and CATE results are exploratory unless the design supports more, use only variables present in the data, and show wide intervals as results.
+8. **Monte Carlo:** all 200 draws are used for estimator evaluation, and full distributions are reported. Draw 0 is used for figures only.
+9. **Estimand alignment:** every results table carries an `Estimand` column, and no ATT estimate is compared with an ATE benchmark.
+10. **Hand implementations** (AIPW, cross-fitted DML) are each tested against synthetic data with a known effect and against a comparable library implementation.
+
+## 6. Frozen observational benchmark specification (v1)
+
+The machine-readable specification is [`configs/benchmark/v1.toml`](../configs/benchmark/v1.toml). It was committed **before any benchmark treatment-effect estimate was computed**, and a test pins its checksum. Everything committed after it is a result, not a design input.
+
+**Additions made at freeze time** (not in Section 2.8; all fixed before any estimate):
+
+- **Seed derivation:** `SeedSequence(entropy=20080320, spawn_key=(comparison, draw, stream))`.
+  - Scenarios share the selection uniforms of each draw, so Scenario C retains exactly the units Scenario A retains and differs only in what the analyst can see.
+  - The display draw is fixed at index 0.
+- **Overlap guard made concrete:** applies to Scenario A only. If more than 1% of the pair has e*(x) outside [0.01, 0.99] (a covariate-only check), k is halved and a v1.1 amendment is recorded before any outcome is used.
+- **`ipw_att` added** so that matching (ATT) has a weighting comparator with the same estimand.
+- **Matching rules:** 1:1 greedy nearest neighbour on the logit propensity, without replacement, treated units in descending propensity order, caliper 0.2 SD of the logit (Austin, 2011). Caliper sensitivity at 0.05, 0.1, 0.2 and 0.5 SD, and with no caliper.
+- **Trimming:** none in the primary analysis. Sensitivity bounds are [0.01, 0.99], [0.05, 0.95] and [0.10, 0.90]. Trimming changes the estimand to the trimmed-population ATE, which is benchmarked with the true e*(x) under the same bounds.
+- **Inference per estimator:** as listed in the config. Matching standard errors are conditional on the matched sample, so their coverage is assessed empirically across the 200 draws.
+- **Robustness specifications pre-registered for Milestone 9:** alternative propensity and outcome models, and a placebo test that refits every nuisance model.
+
+**Known property of the design, recorded at freeze:** in Scenarios A and B, the analyst's main-effects logistic propensity model *nests* the true selection model (ln history, recency, a multichannel indicator, newbie). Propensity-based estimators therefore have a correctly specified treatment model. The outcome models are not correctly specified (spend is zero-inflated and nonlinear). This favours propensity-based and doubly robust estimators over pure outcome regression, and it will be stated alongside the results. The pre-registered `alt_categorical` and `alt_gbm` propensity specifications show what happens without that advantage.
+
+**Change log:**
+
+| Version | Date | Change | Reason |
+|---|---|---|---|
+| 1.0.0 | 2026-10-09 | Initial frozen specification | — |
+
+---
+
+## 7. References
 
 These were verified against the publisher or author pages during this milestone:
 

@@ -1,0 +1,222 @@
+# Causeway observational benchmark specification, version 1.
+#
+# FROZEN before any benchmark treatment-effect estimate was computed.
+# Human-readable rationale: docs/design.md, Section 2.8 and Section 6.
+# This file must not be edited. A legitimate change creates configs/benchmark/v2.toml and a
+# dated entry in docs/design.md explaining the reason; tests/test_benchmark_config.py enforces
+# this file's checksum.
+
+[meta]
+benchmark_version = "1.0.0"
+frozen_on = "2026-10-09"
+status = "frozen"
+design_document = "docs/design.md"
+
+[randomness]
+base_seed = 20080320
+n_draws = 200
+# Seeds derive from numpy.random.SeedSequence(entropy=base_seed, spawn_key=key):
+#   selection uniforms     key = (comparison_index, draw_index, 0)
+#   estimator randomness   key = (comparison_index, draw_index, 1)
+# Scenarios share the selection uniforms of a (comparison, draw), so Scenario C retains exactly
+# the same units as Scenario A.
+seed_derivation = "numpy.random.SeedSequence(entropy=base_seed, spawn_key=(comparison_index, draw_index, stream))"
+# Used for explanatory figures only; fixed by index, never chosen by appearance.
+fixed_display_draw = 0
+
+[[comparisons]]
+index = 0
+name = "mens_vs_control"
+treatment_arm = "Mens E-Mail"
+control_arm = "No E-Mail"
+
+[[comparisons]]
+index = 1
+name = "womens_vs_control"
+treatment_arm = "Womens E-Mail"
+control_arm = "No E-Mail"
+
+[outcomes]
+primary = "spend"
+secondary = ["visit", "conversion"]
+
+[selection]
+method = "rct_rejection_sampling"
+reference = "Keith, Feldman, Jurgens, Bragg & Bhattacharya (2023), TMLR, arXiv:2307.15176"
+# logit e*(x) = alpha + k * sum(coefficient_j * term_j(x))
+link = "logit"
+# z-scores use the mean and population SD (ddof = 0) of the comparison pair (both arms).
+standardization_population = "comparison_pair"
+# alpha is solved by bisection so that mean_i e*(x_i) over the pair equals this target.
+intercept_target_mean_propensity = 0.5
+intercept_tolerance = 1e-10
+# Unit i with trial arm t_i is kept iff U_i <= P*(T=t_i | x_i) / (P_hat(T=t_i) * M),
+# with P_hat the arm share in the pair and M = max_i P*(T=t_i | x_i) / P_hat(T=t_i).
+acceptance_rule = "U <= p_star(t | x) / (arm_share(t) * M)"
+selection_covariates = ["history", "recency", "channel", "newbie"]
+
+[[selection.terms]]
+name = "z_log_history"
+definition = "z(ln(history))"
+coefficient = 0.75
+
+[[selection.terms]]
+name = "z_recency"
+definition = "z(recency)"
+coefficient = -0.75
+
+[[selection.terms]]
+name = "multichannel"
+definition = "1{channel == 'Multichannel'}"
+coefficient = 0.50
+
+[[selection.terms]]
+name = "newbie"
+definition = "newbie"
+coefficient = -0.50
+
+[selection.overlap_guard]
+# Covariate-only check, run before any outcome is touched. Applies to Scenario A only;
+# Scenario B is an intended positivity stress test.
+applies_to = ["A"]
+extreme_bounds = [0.01, 0.99]
+max_share_outside_bounds = 0.01
+action_if_violated = "halve k and record a v1.1 amendment before any outcome-based estimate"
+
+[analyst]
+# Covariates available to the analyst when nothing is hidden. history_segment is excluded
+# because it is a deterministic function of history.
+covariates = ["history", "recency", "mens", "womens", "newbie", "zip_code", "channel"]
+# Encoding used by every propensity and outcome model unless a robustness spec says otherwise.
+encoding = "ln(history), recency (linear), mens, womens, newbie, zip_code dummies (ref Suburban), channel dummies (ref Phone)"
+
+[scenarios.A]
+label = "Moderate observed selection"
+selection_strength_k = 1.0
+hidden_covariates = []
+role = "primary estimator comparison"
+
+[scenarios.B]
+label = "Strong observed selection"
+selection_strength_k = 2.0
+hidden_covariates = []
+role = "overlap, positivity and extreme-weight stress test"
+
+[scenarios.C]
+label = "Hidden confounder"
+selection_strength_k = 1.0
+hidden_covariates = ["recency"]
+role = "known violation of unconfoundedness; tests whether sensitivity analysis flags it"
+
+# Experimental benchmarks, computed on the FULL randomized pair (finite-population targets).
+[benchmarks.ATE]
+definition = "difference in means between arms over the full pair"
+[benchmarks.ATT]
+definition = "difference in Hajek means over the full pair, each unit weighted by e*(x_i)"
+[benchmarks.ATE_trimmed]
+definition = "difference in means over full-pair units with e*(x) inside the trimming bounds"
+
+[estimation]
+ci_level = 0.95
+
+[[estimators]]
+name = "naive_difference"
+estimand = "unadjusted association"
+benchmark = "ATE"
+inference = "Neyman / HC2 standard error"
+
+[[estimators]]
+name = "oracle_ipw"
+estimand = "ATE"
+benchmark = "ATE"
+propensity = "true design propensity e*(x)"
+weights = "Hajek-normalized inverse probability weights"
+inference = "influence-function standard error"
+role = "validity check on the benchmark construction, not a feasible estimator"
+
+[[estimators]]
+name = "ipw_ate"
+estimand = "ATE"
+benchmark = "ATE"
+propensity = "logistic regression on the analyst encoding (unpenalized)"
+weights = "Hajek-normalized: T/e and (1-T)/(1-e)"
+inference = "influence-function standard error treating e as known (conservative for the ATE)"
+
+[[estimators]]
+name = "ipw_att"
+estimand = "ATT"
+benchmark = "ATT"
+propensity = "logistic regression on the analyst encoding (unpenalized)"
+weights = "treated 1; controls e/(1-e), Hajek-normalized"
+inference = "influence-function standard error treating e as known"
+
+[[estimators]]
+name = "matching_nn"
+estimand = "ATT"
+benchmark = "ATT"
+propensity = "logistic regression on the analyst encoding (unpenalized)"
+inference = "paired-difference standard error conditional on the matched sample; coverage assessed empirically"
+
+[estimators.matching]
+distance = "logit of the estimated propensity score"
+ratio = 1
+replacement = false
+algorithm = "greedy; treated units processed in descending propensity, ties by row_id"
+caliper_sd_of_logit = 0.2
+caliper_reference = "Austin (2011), Pharmaceutical Statistics"
+caliper_sensitivity = [0.05, 0.1, 0.2, 0.5, "none"]
+report = ["treated units discarded", "post-match SMDs", "matched-pair distance distribution"]
+
+[[estimators]]
+name = "outcome_regression"
+estimand = "ATE"
+benchmark = "ATE"
+outcome_model = "OLS fitted separately by arm on the analyst encoding; g-computation average"
+inference = "HC2 standard error of the treatment coefficient in the centred, fully interacted regression"
+
+[[estimators]]
+name = "aipw"
+estimand = "ATE"
+benchmark = "ATE"
+implementation = "hand-written, 5-fold cross-fitting"
+propensity = "logistic regression on the analyst encoding"
+outcome_model = "OLS by arm on the analyst encoding"
+inference = "influence-function standard error"
+cross_check = "econml.dr.LinearDRLearner with the same nuisance models"
+
+[[estimators]]
+name = "dml_irm"
+estimand = "ATE"
+benchmark = "ATE"
+implementation = "doubleml.DoubleMLIRM, 5-fold cross-fitting, n_rep = 1"
+propensity = "sklearn HistGradientBoostingClassifier (default hyperparameters)"
+outcome_model = "sklearn HistGradientBoostingRegressor (default hyperparameters)"
+inference = "DoubleML orthogonal-score standard error"
+cross_check = "hand-written cross-fitted orthogonal score with the same learners and folds"
+
+[trimming]
+primary = "none"
+sensitivity_bounds = [[0.01, 0.99], [0.05, 0.95], [0.10, 0.90]]
+applies_to = ["ipw_ate", "aipw", "dml_irm"]
+# Trimming on estimated propensity changes the estimand to the overlap population.
+estimand_when_trimmed = "ATE over the trimmed population"
+benchmark_when_trimmed = "ATE_trimmed, using the true e*(x) with the same bounds; any mismatch between estimated and true trimming sets is reported"
+
+[monte_carlo]
+metrics = ["bias", "absolute_bias", "rmse", "ci_coverage", "estimator_variance", "failure_rate", "effective_sample_size"]
+failure_definition = "exception, non-finite estimate, or non-finite standard error"
+effective_sample_size = "Kish: (sum w)^2 / sum w^2, per arm, weighting estimators only"
+report = "full distributions across the 200 draws, not only averages"
+
+[robustness]
+# Pre-registered here; executed in Milestone 9.
+propensity_specifications = [
+    "main: main-effects logistic on the analyst encoding",
+    "alt_categorical: recency as 12 categories and history_segment dummies instead of ln(history)",
+    "alt_gbm: HistGradientBoostingClassifier (default hyperparameters)",
+]
+outcome_specifications = [
+    "main: OLS by arm",
+    "alt_gbm: HistGradientBoostingRegressor by arm",
+]
+placebo = "permuted treatment with every nuisance model refitted on the placebo treatment"

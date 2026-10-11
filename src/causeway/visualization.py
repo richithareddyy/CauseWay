@@ -467,6 +467,9 @@ ESTIMATOR_DISPLAY = {
     "ipw_ate": "IPW (ATE)",
     "ipw_att": "IPW (ATT)",
     "matching_nn": "1:1 NN matching (ATT)",
+    "outcome_regression": "Outcome regression (OLS)",
+    "aipw": "AIPW (linear, cross-fitted)",
+    "dml_irm": "DML (gradient boosting)",
 }
 ADJUSTMENT_STYLE = {
     "unadjusted": {"label": "Unadjusted", "color": INK_MUTED, "filled": False},
@@ -667,10 +670,15 @@ def estimator_error_grid(relative: pd.DataFrame, outcome: str, path: Path, estim
         fontweight="bold",
         fontsize=10,
     )
+    by_benchmark: dict[str, list[str]] = {}
+    for estimator in estimators:
+        benchmark = relative.loc[relative["estimator"] == estimator, "benchmark"].iloc[0]
+        by_benchmark.setdefault(benchmark, []).append(ESTIMATOR_DISPLAY[estimator])
     _footnote(
         fig,
-        "Each estimator is compared with the experimental benchmark for its own estimand: ATE for the "
-        "naive, oracle and IPW (ATE) rows; ATT for IPW (ATT) and matching.",
+        "Each estimator is compared with the experimental benchmark for its own estimand. "
+        + "; ".join(f"{benchmark} benchmark: {', '.join(names)}" for benchmark, names in by_benchmark.items())
+        + ".",
     )
     fig.tight_layout()
     return save(fig, path)

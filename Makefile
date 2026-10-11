@@ -39,6 +39,7 @@ analysis:
 	$(RUN) experiment
 	$(RUN) benchmark
 	$(RUN) propensity
+	$(RUN) estimation
 
 env:
 	$(RUN) env

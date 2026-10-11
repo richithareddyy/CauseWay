@@ -385,6 +385,15 @@ These are recorded for the later milestones. None of them changes the frozen ben
    - **Scenario C: balance on observed covariates is not evidence of unconfoundedness.** After IPW, the largest |SMD| on the covariates the analyst can see is 0.007–0.009, better than in Scenario A. Yet the hidden recency remains at 0.73 and IPW stays biased (spend +18% Mens, +46% Womens; visit coverage 0.09–0.24).
    - **Predictive accuracy does not track causal adequacy.** Propensity AUC is highest in Scenario B (0.91), where estimation is hardest. In Scenario C the AUC is lower (0.73), yet nothing in the observed data reveals the bias.
 
+7. **Outcome regression, AIPW and DML (Milestone 6, 2026-10-11).**
+   - **AIPW and DML are unbiased in Scenarios A and B** within Monte Carlo error. One exception: DML for Womens spend in Scenario A shows +0.029 (MC SE 0.014), about 2 MC SEs and one of eight such cells. That is consistent with chance across this many comparisons and is not interpreted.
+   - **Outcome regression is biased for spend but not for visit** (Mens A −4%, Womens A +10%, Womens B +23%). Arm-specific OLS is misspecified for the zero-inflated spend outcome. It nevertheless has the lowest spend RMSE (Mens A 0.166 vs AIPW 0.224), a bias–variance trade-off. A low RMSE is not evidence of an unbiased estimator.
+   - **DML gains nothing over linear AIPW here.** The gradient-boosting nuisances predict slightly worse out of fold than the linear models (spend RMSE 15.9 vs 15.5; propensity log loss 0.563 vs 0.558). The true propensity is logistic-linear by construction, and two-week spend carries little predictable signal. DML's spend RMSE is equal or worse (Womens B 0.609 vs 0.521).
+   - **Scenario C: double robustness does not protect against an omitted confounder.** AIPW and DML spend bias is +19% (Mens) and +46–47% (Womens), with visit coverage 0.08–0.24. Double robustness guards against misspecifying one of two models, not against a variable neither model can see.
+   - **Implementation checks.** The hand-written AIPW matches EconML's LinearDRLearner (max difference 9e-16), and the hand-written orthogonal score matches DoubleML's IRM exactly, over 180 sample–outcome checks with identical models and folds. DoubleML's default 0.01 propensity clipping was disabled to follow the frozen "no trimming" rule, and a test shows it would otherwise have changed estimates.
+   - **Note for Milestone 9.** DoubleML warns that its sensitivity elements (nu2) are not positive in some fits. This concerns its built-in sensitivity analysis, not the effect estimate. That tool will be checked before any use.
+   - **Runtime.** 23 minutes for all 1,200 samples on 8 single-threaded workers. All 200 draws were used; no reduction was needed.
+
 ---
 
 ## 8. References

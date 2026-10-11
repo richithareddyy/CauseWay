@@ -727,3 +727,180 @@ def run_propensity_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
     report_path = results_dir / "propensity_report.md"
     report_path.write_text(_propensity_markdown(spec, summary, diagnostics, environment()))
     return BenchmarkOutputs(tables, figures, report_path)
+
+
+# --------------------------------------------------------------------------------------------------
+# Part II, Milestone 6: outcome regression, AIPW and Double Machine Learning
+# --------------------------------------------------------------------------------------------------
+
+ESTIMATION_ESTIMATORS = ["naive_difference", "oracle_ipw", "outcome_regression", "aipw", "dml_irm"]
+CROSS_CHECK_DRAWS = 10  # fixed from runtime considerations before any result was seen
+
+
+def _nuisance_summary(diagnostics: pd.DataFrame) -> pd.DataFrame:
+    columns = [c for c in diagnostics.columns if c.startswith(("aipw_", "dml_")) and not c.endswith("_error")]
+    rows = []
+    for (comparison, scenario), group in diagnostics.groupby(["comparison", "scenario"], sort=False):
+        for column in columns:
+            values = group[column].dropna()
+            model, metric = column.split("_", 1)
+            rows.append(
+                {
+                    "comparison": comparison,
+                    "scenario": scenario,
+                    "model": model,
+                    "metric": metric,
+                    "mean": values.mean(),
+                    "p2_5": values.quantile(0.025),
+                    "p97_5": values.quantile(0.975),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def _estimation_markdown(
+    spec: dict, summary: pd.DataFrame, nuisance: pd.DataFrame, checks: pd.DataFrame, env: dict
+) -> str:
+    lines = [
+        "# Part II — Outcome regression, AIPW and Double Machine Learning",
+        "",
+        f"Frozen specification v{spec['meta']['benchmark_version']} (checksum verified); "
+        f"{spec['randomness']['n_draws']} constructed samples per comparison and scenario; "
+        f"Python {env['python']}.",
+        "",
+        "- **Outcome regression:** OLS fitted separately in each arm, averaged over the sample "
+        "(g-computation). "
+        "Correct only if the outcome model is.",
+        "- **AIPW:** the doubly robust score combining a logistic propensity model and arm-specific "
+        "OLS, with "
+        "5-fold cross-fitting. Consistent if either model is correct.",
+        "- **DML:** the same orthogonal score with gradient-boosting nuisance models (DoubleML IRM). "
+        "Orthogonality makes first-order nuisance errors irrelevant, and cross-fitting prevents a flexible "
+        "learner from overfitting the units it is evaluated on. No propensity clipping (DoubleML's default "
+        "0.01 clipping is disabled to follow the frozen specification).",
+        "",
+        "## 1. Estimator performance against estimand-matched benchmarks",
+        "",
+        "| Comparison | Scenario | Outcome | Estimator | Estimand | Benchmark value | Bias (MC SE) | Bias % "
+        "| Absolute bias | RMSE | Coverage | SE / SD | Failures |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for _, s in summary.iterrows():
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[s['comparison']]} | {s['scenario']} | {s['outcome']} "
+            f"| {viz.ESTIMATOR_DISPLAY[s['estimator']]} | {s['estimand']} → {s['benchmark']} "
+            f"| {s['benchmark_value']:.4f} | {s['bias']:+.4f} ({s['bias_mc_se']:.4f}) "
+            f"| {s['bias'] / s['benchmark_value']:+.0%} | {s['absolute_bias']:.4f} | {s['rmse']:.4f} "
+            f"| {s['coverage']:.3f} | {s['se_to_sd_ratio']:.2f} | {s['failure_rate']:.0%} |"
+        )
+    lines += [
+        "",
+        "Coverage is against the finite-population benchmark; read it against the oracle row.",
+        "",
+        "## 2. Nuisance models: predictive evaluation (out-of-fold)",
+        "",
+        "These metrics describe the nuisance fits. They are not the target: the estimates above are judged "
+        "only against the experimental benchmark.",
+        "",
+        "| Comparison | Scenario | Model | Metric | Mean | 2.5% | 97.5% |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for _, n in nuisance.iterrows():
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[n['comparison']]} | {n['scenario']} | {n['model'].upper()} "
+            f"| {n['metric']} | {n['mean']:.4f} | {n['p2_5']:.4f} | {n['p97_5']:.4f} |"
+        )
+    lines += [
+        "",
+        f"## 3. Implementation cross-checks (first {CROSS_CHECK_DRAWS} draws of every comparison "
+        "and scenario)",
+        "",
+        "| Check | Samples × outcomes | Max absolute difference in the estimate |",
+        "|---|---|---|",
+    ]
+    for _, c in checks.iterrows():
+        lines.append(f"| {c['check']} | {c['n']} | {c['max_abs_difference']:.2e} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def run_estimation_report(paths: DataPaths | None = None, n_jobs: int = 8) -> BenchmarkOutputs:
+    from causeway.benchmark import experimental_benchmarks, monte_carlo_summary
+    from causeway.config import load_benchmark_config
+    from causeway.evaluation import (
+        cross_check_methods,
+        dml_methods,
+        reference_methods,
+        regression_methods,
+        run_estimator_study,
+    )
+
+    paths = paths or DataPaths()
+    spec = load_benchmark_config(1)
+    frame = load_processed(paths)
+    study = run_estimator_study(
+        frame, [reference_methods, regression_methods, dml_methods], spec, n_jobs=n_jobs
+    )
+    checks_study = run_estimator_study(
+        frame, [cross_check_methods], spec, n_draws=CROSS_CHECK_DRAWS, n_jobs=n_jobs
+    )
+
+    benchmarks = pd.concat(
+        [experimental_benchmarks(p, spec) for p in study.pairs.values()], ignore_index=True
+    )
+    summary = monte_carlo_summary(study.estimates, benchmarks)
+    nuisance = _nuisance_summary(study.diagnostics)
+
+    keys = ["comparison", "scenario", "draw", "outcome"]
+    wide = (
+        pd.concat([study.estimates, checks_study.estimates])
+        .pivot_table(index=keys, columns="estimator", values="estimate")
+        .dropna()
+    )
+    checks = pd.DataFrame(
+        [
+            {
+                "check": "AIPW: hand-written vs EconML LinearDRLearner (same models and folds)",
+                "n": len(wide),
+                "max_abs_difference": float((wide["aipw"] - wide["aipw_econml"]).abs().max()),
+            },
+            {
+                "check": "DML: DoubleML IRM vs hand-written orthogonal score (same learners and folds)",
+                "n": len(wide),
+                "max_abs_difference": float((wide["dml_irm"] - wide["dml_hand"]).abs().max()),
+            },
+        ]
+    )
+
+    targets = benchmarks.rename(columns={"estimand": "benchmark", "value": "benchmark_value"})
+    relative = study.estimates.merge(
+        targets[["comparison", "scenario", "outcome", "benchmark", "benchmark_value"]],
+        on=["comparison", "scenario", "outcome", "benchmark"],
+    )
+    relative["relative_error"] = (relative["estimate"] - relative["benchmark_value"]) / relative[
+        "benchmark_value"
+    ]
+
+    tables = {
+        "monte_carlo_summary": summary,
+        "nuisance_summary": nuisance,
+        "cross_checks": checks,
+        "estimates": study.estimates,
+        "diagnostics": study.diagnostics,
+    }
+    results_dir = paths.root / "reports" / "results" / "estimation"
+    figures_dir = paths.root / "reports" / "figures" / "estimation"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    for name, table in tables.items():
+        table.to_csv(results_dir / f"{name}.csv", index=False)
+    figures = [
+        viz.estimator_error_grid(
+            relative, "spend", figures_dir / "estimator_error_spend.png", ESTIMATION_ESTIMATORS
+        ),
+        viz.estimator_error_grid(
+            relative, "visit", figures_dir / "estimator_error_visit.png", ESTIMATION_ESTIMATORS
+        ),
+    ]
+    report_path = results_dir / "estimation_report.md"
+    report_path.write_text(_estimation_markdown(spec, summary, nuisance, checks, environment()))
+    return BenchmarkOutputs(tables, figures, report_path)

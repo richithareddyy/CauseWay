@@ -12,6 +12,8 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
+from threadpoolctl import threadpool_limits
 
 from causeway.balance import standardized_mean_difference
 from causeway.benchmark import Pair, build_pair, estimator_seed, oracle_ipw
@@ -213,39 +215,172 @@ class EstimatorStudy:
     pairs: dict[str, Pair]
 
 
+def apply_methods(sample: ObservationalSample, methods: list[Method], spec: dict) -> tuple[list[dict], dict]:
+    """Run every method on one sample. A method that raises is recorded as failed rows for that draw."""
+    diagnostics = {
+        "comparison": sample.comparison,
+        "scenario": sample.scenario,
+        "draw": sample.draw,
+        "n": len(sample.treated),
+    }
+    estimate_rows = []
+    for method in methods:
+        try:
+            rows, extra = method(sample, spec)
+        except (np.linalg.LinAlgError, ValueError, ZeroDivisionError) as error:
+            failed = {"estimate": np.nan, "se": np.nan, "ci_low": np.nan, "ci_high": np.nan}
+            rows = [
+                row
+                for name, estimand, benchmark in method.estimators
+                for row in _rows(sample, name, estimand, benchmark, [failed] * len(sample.outcomes))
+            ]
+            extra = {f"{method.__name__}_error": repr(error)}
+        estimate_rows += rows
+        diagnostics.update(extra)
+    return estimate_rows, diagnostics
+
+
+def _apply_single_threaded(sample: ObservationalSample, methods: list[Method], spec: dict):
+    with threadpool_limits(limits=1):
+        return apply_methods(sample, methods, spec)
+
+
 def run_estimator_study(
     processed: pd.DataFrame,
     methods: list[Method],
     spec: dict | None = None,
     scenarios: list[str] | None = None,
     n_draws: int | None = None,
+    n_jobs: int = 1,
 ) -> EstimatorStudy:
-    """Apply each method to every (comparison, scenario, draw) sample. A method that raises is recorded as
-    a failure for that draw rather than stopping the study."""
+    """Apply each method to every (comparison, scenario, draw) sample.
+
+    With n_jobs > 1 the samples are processed in parallel, one thread per worker. Results do not depend on
+    n_jobs: every sample carries its own seed and the rows are sorted into a fixed order afterwards.
+    """
     spec = spec or load_benchmark_config(1)
     scenarios = scenarios or list(spec["scenarios"])
     n_draws = n_draws or spec["randomness"]["n_draws"]
     pairs = {c["name"]: build_pair(processed, c, spec) for c in spec["comparisons"]}
-    estimate_rows, diagnostic_rows = [], []
-    for sample in iter_samples(pairs, spec, scenarios, n_draws):
-        diagnostics = {
-            "comparison": sample.comparison,
-            "scenario": sample.scenario,
-            "draw": sample.draw,
-            "n": len(sample.treated),
-        }
-        for method in methods:
-            try:
-                rows, extra = method(sample, spec)
-            except (np.linalg.LinAlgError, ValueError, ZeroDivisionError) as error:
-                failed = {"estimate": np.nan, "se": np.nan, "ci_low": np.nan, "ci_high": np.nan}
-                rows = [
-                    row
-                    for name, estimand, benchmark in method.estimators
-                    for row in _rows(sample, name, estimand, benchmark, [failed] * len(sample.outcomes))
-                ]
-                extra = {f"{method.__name__}_error": repr(error)}
-            estimate_rows += rows
-            diagnostics.update(extra)
-        diagnostic_rows.append(diagnostics)
-    return EstimatorStudy(pd.DataFrame(estimate_rows), pd.DataFrame(diagnostic_rows), pairs)
+    samples = iter_samples(pairs, spec, scenarios, n_draws)
+    if n_jobs == 1:
+        results = [apply_methods(sample, methods, spec) for sample in samples]
+    else:
+        results = Parallel(n_jobs=n_jobs)(delayed(_apply_single_threaded)(s, methods, spec) for s in samples)
+    estimates = pd.DataFrame([row for rows, _ in results for row in rows])
+    diagnostics = pd.DataFrame([d for _, d in results])
+    keys = ["comparison", "scenario", "draw"]
+    if len(estimates):
+        estimates = estimates.sort_values([*keys, "estimator", "outcome"], kind="stable").reset_index(
+            drop=True
+        )
+    diagnostics = diagnostics.sort_values(keys, kind="stable").reset_index(drop=True)
+    return EstimatorStudy(estimates, diagnostics, pairs)
+
+
+# --------------------------------------------------------------------------------------------------
+# Milestone 6: outcome regression, AIPW and Double Machine Learning
+# --------------------------------------------------------------------------------------------------
+
+CROSS_FIT_FOLDS = 5  # frozen v1: 5-fold cross-fitting for AIPW and DML
+
+
+def _nuisance_metrics(
+    prefix: str,
+    y: np.ndarray,
+    t: np.ndarray,
+    propensity: np.ndarray,
+    mu1: np.ndarray,
+    mu0: np.ndarray,
+    outcomes: list[str],
+) -> dict:
+    """Out-of-fold predictive quality of the nuisance models (predictive, not causal, evaluation)."""
+    out = {f"{prefix}_{k}": v for k, v in predictive_metrics(propensity, t).items()}
+    out[f"{prefix}_propensity_min"] = float(propensity.min())
+    out[f"{prefix}_propensity_max"] = float(propensity.max())
+    for j, outcome in enumerate(outcomes):
+        residual = np.where(t, y[:, j] - mu1[:, j], y[:, j] - mu0[:, j])
+        out[f"{prefix}_outcome_rmse_{outcome}"] = float(np.sqrt(np.mean(residual**2)))
+    return out
+
+
+def regression_methods(sample: ObservationalSample, spec: dict) -> tuple[list[dict], dict]:
+    """outcome_regression (g-computation, arm-specific OLS) and aipw (hand-written, cross-fitted)."""
+    from causeway.estimators import (
+        cross_fit_folds,
+        cross_fitted_scores,
+        linear_outcome_model,
+        linear_propensity_model,
+        outcome_regression,
+    )
+
+    ci = spec["estimation"]["ci_level"]
+    t = sample.treated
+    regression = [
+        outcome_regression(sample.y[:, k], t, sample.x_analyst, ci).__dict__ for k in range(sample.y.shape[1])
+    ]
+    folds = cross_fit_folds(len(t), CROSS_FIT_FOLDS, sample.seed)
+    fit = cross_fitted_scores(
+        sample.y, t, sample.x_analyst, folds, linear_propensity_model, linear_outcome_model
+    )
+    aipw = [e.__dict__ for e in fit.estimates(ci)]
+    rows = _rows(sample, "outcome_regression", "ATE", "ATE", regression)
+    rows += _rows(sample, "aipw", "ATE", "ATE", aipw)
+    return rows, _nuisance_metrics("aipw", sample.y, t, fit.propensity, fit.mu1, fit.mu0, sample.outcomes)
+
+
+def dml_methods(sample: ObservationalSample, spec: dict) -> tuple[list[dict], dict]:
+    """dml_irm: DoubleML IRM with gradient-boosting nuisances and the draw's cross-fitting folds."""
+    from causeway.dml import doubleml_irm
+    from causeway.estimators import cross_fit_folds
+
+    ci = spec["estimation"]["ci_level"]
+    t = sample.treated
+    folds = cross_fit_folds(len(t), CROSS_FIT_FOLDS, sample.seed)
+    estimates, mu1, mu0, propensity = [], [], [], None
+    for k in range(sample.y.shape[1]):
+        estimate, predictions = doubleml_irm(sample.y[:, k], t, sample.x_analyst, folds, sample.seed, ci)
+        estimates.append(estimate.__dict__)
+        mu1.append(predictions["ml_g1"])
+        mu0.append(predictions["ml_g0"])
+        propensity = predictions["ml_m"] if propensity is None else propensity
+    diagnostics = _nuisance_metrics(
+        "dml", sample.y, t, propensity, np.column_stack(mu1), np.column_stack(mu0), sample.outcomes
+    )
+    return _rows(sample, "dml_irm", "ATE", "ATE", estimates), diagnostics
+
+
+def cross_check_methods(sample: ObservationalSample, spec: dict) -> tuple[list[dict], dict]:
+    """Library and hand-written counterparts of aipw and dml_irm, with identical nuisance models and folds:
+    EconML's LinearDRLearner for AIPW, and the hand-written orthogonal score for DML."""
+    from econml.dr import LinearDRLearner
+
+    from causeway.dml import hand_dml
+    from causeway.estimators import ArmwiseRegression, cross_fit_folds, linear_propensity_model
+
+    ci = spec["estimation"]["ci_level"]
+    t = sample.treated
+    folds = cross_fit_folds(len(t), CROSS_FIT_FOLDS, sample.seed)
+    econml_rows = []
+    for k in range(sample.y.shape[1]):
+        learner = LinearDRLearner(
+            model_propensity=linear_propensity_model(),
+            model_regression=ArmwiseRegression(),
+            cv=folds,
+            min_propensity=1e-12,
+            random_state=sample.seed,
+        )
+        learner.fit(sample.y[:, k], t.astype(int), X=None, W=sample.x_analyst.to_numpy())
+        low, high = learner.ate_interval(alpha=1 - ci)
+        econml_rows.append(
+            {"estimate": float(learner.ate()), "se": np.nan, "ci_low": float(low), "ci_high": float(high)}
+        )
+    hand = [e.__dict__ for e in hand_dml(sample.y, t, sample.x_analyst, folds, sample.seed).estimates(ci)]
+    rows = _rows(sample, "aipw_econml", "ATE", "ATE", econml_rows)
+    rows += _rows(sample, "dml_hand", "ATE", "ATE", hand)
+    return rows, {}
+
+
+regression_methods.estimators = [("outcome_regression", "ATE", "ATE"), ("aipw", "ATE", "ATE")]
+dml_methods.estimators = [("dml_irm", "ATE", "ATE")]
+cross_check_methods.estimators = [("aipw_econml", "ATE", "ATE"), ("dml_hand", "ATE", "ATE")]

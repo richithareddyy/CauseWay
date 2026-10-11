@@ -21,6 +21,8 @@ dependencies = [
     "econml==0.17.0",
     "doubleml==0.11.4",
     "matplotlib>=3.9",                # static report figures
+    "joblib>=1.4",                    # parallel Monte Carlo draws
+    "threadpoolctl>=3.5",             # one thread per worker
 ]
 
 [project.optional-dependencies]

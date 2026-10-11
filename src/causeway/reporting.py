@@ -518,3 +518,212 @@ def run_benchmark_construction_report(paths: DataPaths | None = None) -> Benchma
     report_path = results_dir / "benchmark_construction_report.md"
     report_path.write_text(_benchmark_markdown(spec, tables, env))
     return BenchmarkOutputs(tables, figures, report_path)
+
+
+# --------------------------------------------------------------------------------------------------
+# Part II, Milestone 5: propensity scores, weighting and matching
+# --------------------------------------------------------------------------------------------------
+
+PROPENSITY_ESTIMATORS = ["naive_difference", "oracle_ipw", "ipw_ate", "ipw_att", "matching_nn"]
+
+
+def _diagnostic_summary(diagnostics: pd.DataFrame) -> pd.DataFrame:
+    columns = {
+        "auc": "Propensity AUC",
+        "log_loss": "Propensity log loss",
+        "brier": "Propensity Brier score",
+        "rmse_vs_true_propensity": "RMSE vs true e*",
+        "share_outside_0.01_0.99": "Share outside [0.01, 0.99]",
+        "share_outside_0.05_0.95": "Share outside [0.05, 0.95]",
+        "ate_ess_share_treated": "ATE ESS share (treated)",
+        "ate_ess_share_control": "ATE ESS share (control)",
+        "ate_weight_max_treated": "Max ATE weight / mean (treated)",
+        "ate_weight_max_control": "Max ATE weight / mean (control)",
+        "att_ess_share_control": "ATT ESS share (control)",
+        "max_abs_smd_unadjusted": "Max |SMD| unadjusted",
+        "max_abs_smd_ipw_ate": "Max |SMD| after IPW (ATE)",
+        "max_abs_smd_ipw_att": "Max |SMD| after IPW (ATT)",
+        "max_abs_smd_matched": "Max |SMD| after matching",
+        "max_abs_smd_ipw_ate_visible": "Max |SMD| after IPW (ATE), analyst-visible covariates only",
+        "max_abs_smd_matched_visible": "Max |SMD| after matching, analyst-visible covariates only",
+        "matching_share_treated_discarded": "Share of treated left unmatched",
+        "matching_mean_distance": "Mean matched distance (logit)",
+    }
+    rows = []
+    for (comparison, scenario), group in diagnostics.groupby(["comparison", "scenario"], sort=False):
+        for column, label in columns.items():
+            values = group[column].dropna()
+            rows.append(
+                {
+                    "comparison": comparison,
+                    "scenario": scenario,
+                    "diagnostic": label,
+                    "mean": values.mean(),
+                    "p2_5": values.quantile(0.025),
+                    "p97_5": values.quantile(0.975),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def _propensity_markdown(spec: dict, summary: pd.DataFrame, diagnostics: pd.DataFrame, env: dict) -> str:
+    lines = [
+        "# Part II — Propensity scores, weighting and matching",
+        "",
+        f"Frozen specification v{spec['meta']['benchmark_version']} (checksum verified). "
+        f"{spec['randomness']['n_draws']} constructed samples per comparison and scenario; "
+        f"Python {env['python']}.",
+        "Propensity model: unpenalized logistic regression on the analyst covariates "
+        "(Scenario C omits recency). "
+        "No trimming, clipping or caliper tuning beyond the frozen rules.",
+        "",
+        "## 1. Propensity model: predictive versus causal evaluation",
+        "",
+        "Predictive metrics describe how well the model separates the arms; they are not a target. "
+        "The causal "
+        "diagnostics (distance from the true design propensity, overlap, weight stability, balance) decide "
+        "whether the scores are fit for adjustment.",
+        "",
+        "| Comparison | Scenario | Diagnostic | Mean | 2.5% | 97.5% |",
+        "|---|---|---|---|---|---|",
+    ]
+    for _, d in diagnostics.iterrows():
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[d['comparison']]} | {d['scenario']} "
+            f"| {d['diagnostic'].replace('|', '\\|')} "
+            f"| {d['mean']:.4f} | {d['p2_5']:.4f} | {d['p97_5']:.4f} |"
+        )
+    lines += [
+        "",
+        "## 2. Estimator performance against estimand-matched benchmarks",
+        "",
+        "| Comparison | Scenario | Outcome | Estimator | Estimand | Benchmark value | Bias (MC SE) | Bias % "
+        "| Absolute bias | RMSE | Coverage | SE / SD | Failures |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for _, s in summary.iterrows():
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[s['comparison']]} | {s['scenario']} | {s['outcome']} "
+            f"| {viz.ESTIMATOR_DISPLAY[s['estimator']]} | {s['estimand']} → {s['benchmark']} "
+            f"| {s['benchmark_value']:.4f} "
+            f"| {s['bias']:+.4f} ({s['bias_mc_se']:.4f}) | {s['bias'] / s['benchmark_value']:+.0%} "
+            f"| {s['absolute_bias']:.4f} | {s['rmse']:.4f} | {s['coverage']:.3f} | {s['se_to_sd_ratio']:.2f} "
+            f"| {s['failure_rate']:.0%} |"
+        )
+    lines += [
+        "",
+        "Coverage is measured against the finite-population benchmark and must be read against the "
+        "oracle row "
+        "(see the benchmark construction report): every sample is a subset of the same trial.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def run_propensity_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
+    from causeway.benchmark import experimental_benchmarks, monte_carlo_summary
+    from causeway.config import load_benchmark_config
+    from causeway.evaluation import (
+        iter_samples,
+        propensity_methods,
+        reference_methods,
+        run_estimator_study,
+    )
+    from causeway.matching import match_on_propensity, matching_weights
+    from causeway.propensity import fit_logistic_propensity
+    from causeway.weighting import ate_weights, kish_ess
+
+    paths = paths or DataPaths()
+    spec = load_benchmark_config(1)
+    frame = load_processed(paths)
+    study = run_estimator_study(frame, [reference_methods, propensity_methods], spec)
+    benchmarks = pd.concat(
+        [experimental_benchmarks(p, spec) for p in study.pairs.values()], ignore_index=True
+    )
+    summary = monte_carlo_summary(study.estimates, benchmarks)
+    diagnostics = _diagnostic_summary(study.diagnostics)
+
+    targets = benchmarks.rename(columns={"estimand": "benchmark", "value": "benchmark_value"})
+    relative = study.estimates.merge(
+        targets[["comparison", "scenario", "outcome", "benchmark", "benchmark_value"]],
+        on=["comparison", "scenario", "outcome", "benchmark"],
+    )
+    relative["relative_error"] = (relative["estimate"] - relative["benchmark_value"]) / relative[
+        "benchmark_value"
+    ]
+
+    caliper = next(e for e in spec["estimators"] if e["name"] == "matching_nn")["matching"][
+        "caliper_sd_of_logit"
+    ]
+    display = spec["randomness"]["fixed_display_draw"]
+    overlap_panels, balance_rows, weight_panels = [], [], []
+    for sample in iter_samples(study.pairs, spec, list(spec["scenarios"]), display + 1):
+        if sample.draw != display:
+            continue
+        t = sample.treated
+        scores = fit_logistic_propensity(sample.x_analyst, t).scores
+        overlap_panels.append(
+            {
+                "comparison": sample.comparison,
+                "scenario": sample.scenario,
+                "score_treated": scores[t],
+                "score_control": scores[~t],
+            }
+        )
+        weights = ate_weights(scores, t)
+        if sample.scenario in ("A", "B") and sample.comparison == "mens_vs_control":
+            weight_panels.append(
+                {
+                    "comparison": sample.comparison,
+                    "scenario": sample.scenario,
+                    "w_treated": weights[t] / weights[t].mean(),
+                    "w_control": weights[~t] / weights[~t].mean(),
+                    "ess_treated": kish_ess(weights[t]) / t.sum(),
+                    "ess_control": kish_ess(weights[~t]) / (~t).sum(),
+                }
+            )
+        if sample.scenario in ("A", "C"):
+            matched = matching_weights(t, match_on_propensity(scores, t, sample.row_ids, caliper))
+            for column in COVARIATE_COLUMNS:
+                x = sample.covariates[column].to_numpy()
+                for state, w in (("unadjusted", None), ("ipw_ate", weights), ("matched", matched)):
+                    balance_rows.append(
+                        {
+                            "comparison": sample.comparison,
+                            "scenario": sample.scenario,
+                            "state": state,
+                            "covariate": column,
+                            "smd": standardized_mean_difference(
+                                x[t], x[~t], None if w is None else w[t], None if w is None else w[~t]
+                            ),
+                        }
+                    )
+
+    tables = {
+        "monte_carlo_summary": summary,
+        "diagnostic_summary": diagnostics,
+        "estimates": study.estimates,
+        "diagnostics": study.diagnostics,
+        "display_balance": pd.DataFrame(balance_rows),
+    }
+    results_dir = paths.root / "reports" / "results" / "propensity"
+    figures_dir = paths.root / "reports" / "figures" / "propensity"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    for name, table in tables.items():
+        table.to_csv(results_dir / f"{name}.csv", index=False)
+    figures = [
+        viz.estimated_propensity_overlap(overlap_panels, figures_dir / "estimated_propensity_overlap.png"),
+        viz.adjustment_love_plot(
+            tables["display_balance"], figures_dir / "balance_before_after_adjustment.png"
+        ),
+        viz.weight_distributions(weight_panels, figures_dir / "ipw_weight_distributions.png"),
+        viz.estimator_error_grid(
+            relative, "spend", figures_dir / "estimator_error_spend.png", PROPENSITY_ESTIMATORS
+        ),
+        viz.estimator_error_grid(
+            relative, "visit", figures_dir / "estimator_error_visit.png", PROPENSITY_ESTIMATORS
+        ),
+    ]
+    report_path = results_dir / "propensity_report.md"
+    report_path.write_text(_propensity_markdown(spec, summary, diagnostics, environment()))
+    return BenchmarkOutputs(tables, figures, report_path)

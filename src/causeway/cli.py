@@ -56,6 +56,16 @@ def _benchmark(_: argparse.Namespace) -> int:
     return 0
 
 
+def _propensity(_: argparse.Namespace) -> int:
+    from causeway.reporting import run_propensity_report
+
+    outputs = run_propensity_report()
+    print(f"report   {outputs.report_path}")
+    for figure in outputs.figures:
+        print(f"figure   {figure}")
+    return 0
+
+
 def _env(_: argparse.Namespace) -> int:
     print(json.dumps(environment(), indent=2))
     return 0
@@ -73,6 +83,9 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser(
         "benchmark", help="Part II: construct and check the observational benchmark"
     ).set_defaults(func=_benchmark)
+    commands.add_parser("propensity", help="Part II: propensity scores, weighting and matching").set_defaults(
+        func=_propensity
+    )
     commands.add_parser("env", help="print Python and dependency versions").set_defaults(func=_env)
     args = parser.parse_args(argv)
     return args.func(args)

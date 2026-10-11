@@ -459,3 +459,218 @@ def naive_vs_oracle(summary_draws: pd.DataFrame, path: Path) -> Path:
     )
     fig.tight_layout()
     return save(fig, path)
+
+
+ESTIMATOR_DISPLAY = {
+    "naive_difference": "Naive difference",
+    "oracle_ipw": "Oracle IPW (true e*)",
+    "ipw_ate": "IPW (ATE)",
+    "ipw_att": "IPW (ATT)",
+    "matching_nn": "1:1 NN matching (ATT)",
+}
+ADJUSTMENT_STYLE = {
+    "unadjusted": {"label": "Unadjusted", "color": INK_MUTED, "filled": False},
+    "ipw_ate": {"label": "IPW (ATE weights)", "color": INK, "filled": True},
+    "matched": {"label": "Matched sample", "color": "#4a3aa7", "filled": True},
+}
+
+
+def estimated_propensity_overlap(panels: list[dict], path: Path) -> Path:
+    """Where do estimated propensities of treated and control customers overlap, by scenario?"""
+    apply_style()
+    scenarios = list(dict.fromkeys(p["scenario"] for p in panels))
+    comparisons = list(dict.fromkeys(p["comparison"] for p in panels))
+    fig, axes = plt.subplots(len(comparisons), len(scenarios), figsize=(11, 5.2), sharex=True)
+    bins = np.linspace(0, 1, 41)
+    for panel in panels:
+        ax = axes[comparisons.index(panel["comparison"]), scenarios.index(panel["scenario"])]
+        treated_arm = "Mens E-Mail" if panel["comparison"].startswith("mens") else "Womens E-Mail"
+        ax.hist(
+            panel["score_treated"],
+            bins=bins,
+            histtype="step",
+            lw=2,
+            color=ARM_COLORS[treated_arm],
+            label=treated_arm,
+        )
+        ax.hist(
+            panel["score_control"],
+            bins=bins,
+            histtype="step",
+            lw=2,
+            color=ARM_COLORS["No E-Mail"],
+            label="No E-Mail",
+        )
+        ax.set_title(f"{CONTRAST_LABELS[panel['comparison']]} · Scenario {panel['scenario']}", fontsize=8.5)
+        ax.grid(axis="x", visible=False)
+        ax.legend(loc="upper center", fontsize=6.5)
+    for ax in axes[-1]:
+        ax.set_xlabel("Estimated propensity score (logistic model)")
+    for ax in axes[:, 0]:
+        ax.set_ylabel("Retained customers")
+    fig.suptitle(
+        "Estimated propensity overlap in the retained sample (display draw 0)",
+        x=0.0,
+        ha="left",
+        fontweight="bold",
+        fontsize=10,
+    )
+    _footnote(
+        fig, "Scenario C's model omits recency, so its scores understate how separated the arms really are."
+    )
+    fig.tight_layout()
+    return save(fig, path)
+
+
+def adjustment_love_plot(balance: pd.DataFrame, path: Path, threshold: float = 0.1) -> Path:
+    """Does weighting or matching remove the imbalance, including on a hidden covariate?"""
+    apply_style()
+    panels = balance[["comparison", "scenario"]].drop_duplicates().itertuples(index=False)
+    panels = list(panels)
+    covariates = list(dict.fromkeys(balance["covariate"]))
+    fig, axes = plt.subplots(2, 2, figsize=(11, 0.55 * len(covariates) + 2.4), sharey=True)
+    offsets = {"unadjusted": -0.2, "ipw_ate": 0.0, "matched": 0.2}
+    for ax, (comparison, scenario) in zip(axes.ravel(), panels, strict=True):
+        ax.axvspan(-threshold, threshold, color=GRID, alpha=0.5, lw=0)
+        ax.axvline(0, color=AXIS, lw=1)
+        sub = balance[(balance["comparison"] == comparison) & (balance["scenario"] == scenario)]
+        for state, style in ADJUSTMENT_STYLE.items():
+            rows = sub[sub["state"] == state]
+            y = [covariates.index(c) + offsets[state] for c in rows["covariate"]]
+            ax.scatter(
+                rows["smd"],
+                y,
+                s=26,
+                label=style["label"],
+                zorder=3,
+                linewidth=1.1,
+                facecolor=style["color"] if style["filled"] else SURFACE,
+                edgecolor=style["color"],
+            )
+        title = f"{CONTRAST_LABELS[comparison]} · Scenario {scenario}"
+        ax.set_title(title + (" (recency hidden)" if scenario == "C" else ""), fontsize=8.5)
+        ax.grid(axis="y", visible=False)
+    for ax in axes[-1]:
+        ax.set_xlabel("Standardized mean difference (treated minus control)")
+    axes[0, 0].set_yticks(range(len(covariates)), [COVARIATE_LABELS.get(c, c) for c in covariates])
+    axes[0, 0].invert_yaxis()
+    for ax in axes[:, 0]:
+        ax.tick_params(axis="y", labelsize=7.5)
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.suptitle(
+        "Covariate balance before and after propensity adjustment (display draw 0)",
+        x=0.0,
+        ha="left",
+        fontweight="bold",
+        fontsize=10,
+    )
+    fig.legend(handles, labels, loc="upper left", bbox_to_anchor=(0.0, 0.955), ncol=3, fontsize=7.5)
+    _footnote(
+        fig,
+        f"Shaded band: |SMD| < {threshold}. SMDs use the unadjusted pooled SD as the scale. Balance on "
+        "a covariate the model cannot see is not improved by adjusting for the others.",
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    return save(fig, path)
+
+
+def weight_distributions(panels: list[dict], path: Path) -> Path:
+    """How extreme are the ATE weights, and how much effective sample size do they leave?"""
+    apply_style()
+    fig, axes = plt.subplots(1, len(panels), figsize=(3.7 * len(panels), 2.9), sharey=True)
+    bins = np.logspace(-2, 3, 50)
+    for ax, panel in zip(np.atleast_1d(axes), panels, strict=True):
+        treated_arm = "Mens E-Mail" if panel["comparison"].startswith("mens") else "Womens E-Mail"
+        for label, values, color, ess in (
+            (treated_arm, panel["w_treated"], ARM_COLORS[treated_arm], panel["ess_treated"]),
+            ("No E-Mail", panel["w_control"], ARM_COLORS["No E-Mail"], panel["ess_control"]),
+        ):
+            ax.hist(
+                values,
+                bins=bins,
+                histtype="step",
+                lw=2,
+                color=color,
+                label=f"{label}: ESS {ess:.0%} of n, max {values.max():.0f}x mean",
+            )
+        ax.set_xscale("log")
+        # Plain tick labels: mathtext is disabled globally so that "$" renders as currency.
+        ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda value, _: f"{value:g}"))
+        ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+        upper = max(panel["w_treated"].max(), panel["w_control"].max())
+        ax.set_xlim(0.1, upper * 1.5)
+        ax.set_title(f"{CONTRAST_LABELS[panel['comparison']]} · Scenario {panel['scenario']}", fontsize=8.5)
+        ax.set_xlabel("ATE weight / mean weight in arm (log scale)")
+        ax.grid(axis="x", visible=False)
+        ax.legend(loc="upper right", fontsize=6.5)
+    np.atleast_1d(axes)[0].set_ylabel("Retained customers")
+    fig.suptitle(
+        "Inverse probability weights (display draw 0)", x=0.0, ha="left", fontweight="bold", fontsize=10
+    )
+    _footnote(
+        fig,
+        "ESS: Kish effective sample size as a share of the arm's retained customers. No weights were "
+        "trimmed or clipped in the primary analysis.",
+    )
+    fig.tight_layout()
+    return save(fig, path)
+
+
+def estimator_error_grid(relative: pd.DataFrame, outcome: str, path: Path, estimators: list[str]) -> Path:
+    """How close does each estimator get to its estimand-matched experimental benchmark?"""
+    apply_style()
+    scenarios = ["A", "B", "C"]
+    comparisons = list(dict.fromkeys(relative["comparison"]))
+    rows = [(c, e) for c in comparisons for e in estimators]
+    fig, axes = plt.subplots(1, 3, figsize=(11, 0.3 * len(rows) + 1.8), sharey=True)
+    for ax, scenario in zip(axes, scenarios, strict=True):
+        ax.axvline(0, color=AXIS, lw=1)
+        for i, (comparison, estimator) in enumerate(rows):
+            values = relative[
+                (relative["comparison"] == comparison)
+                & (relative["scenario"] == scenario)
+                & (relative["outcome"] == outcome)
+                & (relative["estimator"] == estimator)
+            ]
+            errors = values["relative_error"].dropna().to_numpy() * 100
+            if not len(errors):
+                continue
+            low, mid, high = np.percentile(errors, [2.5, 50, 97.5])
+            color = (
+                ORACLE_COLOR
+                if estimator == "oracle_ipw"
+                else (INK_MUTED if estimator == "naive_difference" else CONTRAST_COLORS[comparison])
+            )
+            ax.plot([low, high], [i, i], color=color, lw=2, solid_capstyle="round")
+            ax.plot(mid, i, "o", color=color, ms=5, mec=SURFACE, mew=1)
+        ax.set_title(
+            {"A": "Scenario A: moderate", "B": "Scenario B: strong", "C": "Scenario C: recency hidden"}[
+                scenario
+            ],
+            fontsize=9,
+        )
+        ax.set_xlabel("Error (% of benchmark)")
+        ax.grid(axis="y", visible=False)
+        for boundary in range(len(estimators), len(rows), len(estimators)):
+            ax.axhline(boundary - 0.5, color=GRID, lw=0.8)
+    axes[0].set_yticks(
+        range(len(rows)),
+        [f"{CONTRAST_LABELS[c].split(' (')[0]} · {ESTIMATOR_DISPLAY[e]}" for c, e in rows],
+        fontsize=7.5,
+    )
+    axes[0].set_ylim(len(rows) - 0.5, -0.5)
+    fig.suptitle(
+        f"{outcome.capitalize()}: estimator error across 200 constructed samples (median, 2.5-97.5 "
+        "percentiles)",
+        x=0.0,
+        ha="left",
+        fontweight="bold",
+        fontsize=10,
+    )
+    _footnote(
+        fig,
+        "Each estimator is compared with the experimental benchmark for its own estimand: ATE for the "
+        "naive, oracle and IPW (ATE) rows; ATT for IPW (ATT) and matching.",
+    )
+    fig.tight_layout()
+    return save(fig, path)

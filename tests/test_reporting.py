@@ -32,3 +32,24 @@ def test_report_numbers_come_from_the_effects_table(outputs):
     assert f"| Mens vs No E-Mail | Difference in means | {row['estimate']:.3f} |" in report
     assert "intention-to-treat effect of assignment" in report
     assert "receiving" not in report.split("## Interpretation")[0]
+
+
+def test_propensity_report_escapes_pipes_in_table_cells():
+    from causeway.config import load_benchmark_config
+    from causeway.reporting import _propensity_markdown
+
+    diagnostics = pd.DataFrame(
+        [
+            {
+                "comparison": "mens_vs_control",
+                "scenario": "A",
+                "diagnostic": "Max |SMD| x",
+                "mean": 0.1,
+                "p2_5": 0.0,
+                "p97_5": 0.2,
+            }
+        ]
+    )
+    summary = pd.DataFrame(columns=["comparison"])
+    report = _propensity_markdown(load_benchmark_config(1), summary, diagnostics, {"python": "3.12"})
+    assert "Max \\|SMD\\| x" in report and "\\\\|" not in report

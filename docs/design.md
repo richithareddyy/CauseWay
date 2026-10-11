@@ -394,6 +394,14 @@ These are recorded for the later milestones. None of them changes the frozen ben
    - **Note for Milestone 9.** DoubleML warns that its sensitivity elements (nu2) are not positive in some fits. This concerns its built-in sensitivity analysis, not the effect estimate. That tool will be checked before any use.
    - **Runtime.** 23 minutes for all 1,200 samples on 8 single-threaded workers. All 200 draws were used; no reduction was needed.
 
+8. **Estimator comparison (Milestone 7, 2026-10-11).**
+   - **One dataset cannot rank estimators.** On the pre-registered display draw, every ATE estimator, *including the oracle*, lands about 30% below the Mens benchmark in Scenario A (oracle −30%, AIPW −29%, DML −32%), and 42–52% above the Womens benchmark. Every interval still covers its benchmark. The spread among the adjusted estimators on that draw is small next to the sampling error they share. Only the Monte Carlo distribution separates bias from luck.
+   - **When unconfoundedness holds and the propensity model is right (A and B):** IPW (ATE), AIPW and IPW (ATT) are unbiased within Monte Carlo error on spend in all four comparison-by-scenario cells, and DML in three of four. The naive difference (+48% to +75%), outcome regression (−4% to +23%) and 1:1 matching (−12% to +57%) are not.
+   - **"Best" depends on the loss.** The biased outcome regression has the lowest spend RMSE in every A/B cell (e.g. Mens A 0.166 vs 0.222–0.254 for the unbiased weighting and doubly robust estimators). Its variance is smaller than the weighting estimators', so it wins on mean squared error while losing on bias. The project reports both and does not crown a single winner.
+   - **Calibration.** Read against the oracle, intervals are well calibrated in Scenario A. In Scenario B, IPW (ATT) under-covers (spend coverage 0.80–0.88 against the oracle's 0.975–0.98; SE/SD 0.70–0.89), because the ATT weights on controls become extreme.
+   - **When a confounder is hidden (C):** no adjusted estimator recovers the benchmark. The ATE estimators carry +14% to +19% (Mens) and +34% to +47% (Womens) bias on spend. Matching's smaller spend bias in C (−4%, +13%) reflects offsetting errors, not robustness: its visit bias is +18% and +39%.
+   - **Provenance.** The comparison combines Milestone 5 and 6 outputs only after checking that they share the processed-data checksum, benchmark specification, seed and draw count. Their shared naive and oracle estimates agree exactly across all 7,200 rows.
+
 ---
 
 ## 8. References

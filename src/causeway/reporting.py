@@ -12,6 +12,7 @@ import pandas as pd
 from causeway import eda, schema
 from causeway import visualization as viz
 from causeway.balance import standardized_mean_difference
+from causeway.comparison import ASSUMPTIONS
 from causeway.config import DataPaths
 from causeway.experiment import (
     ExperimentResults,
@@ -21,6 +22,7 @@ from causeway.experiment import (
 )
 from causeway.features import COVARIATE_COLUMNS, covariate_matrix
 from causeway.pipeline import environment, load_processed
+from causeway.provenance import write_provenance
 
 
 @dataclass
@@ -267,6 +269,7 @@ def run_experiment_report(paths: DataPaths | None = None) -> ExperimentOutputs:
     ]
     report_path = results_dir / "experiment_report.md"
     report_path.write_text(_markdown_report(tables, plan, boundary, env))
+    write_provenance(results_dir, paths, experiment_plan_version=plan["meta"]["version"])
     return ExperimentOutputs(results, tables, boundary, figures, report_path)
 
 
@@ -517,6 +520,7 @@ def run_benchmark_construction_report(paths: DataPaths | None = None) -> Benchma
     env = environment()
     report_path = results_dir / "benchmark_construction_report.md"
     report_path.write_text(_benchmark_markdown(spec, tables, env))
+    write_provenance(results_dir, paths, spec)
     return BenchmarkOutputs(tables, figures, report_path)
 
 
@@ -726,6 +730,7 @@ def run_propensity_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
     ]
     report_path = results_dir / "propensity_report.md"
     report_path.write_text(_propensity_markdown(spec, summary, diagnostics, environment()))
+    write_provenance(results_dir, paths, spec)
     return BenchmarkOutputs(tables, figures, report_path)
 
 
@@ -903,4 +908,156 @@ def run_estimation_report(paths: DataPaths | None = None, n_jobs: int = 8) -> Be
     ]
     report_path = results_dir / "estimation_report.md"
     report_path.write_text(_estimation_markdown(spec, summary, nuisance, checks, environment()))
+    write_provenance(results_dir, paths, spec)
+    return BenchmarkOutputs(tables, figures, report_path)
+
+
+# --------------------------------------------------------------------------------------------------
+# Part II, Milestone 7: estimator comparison
+# --------------------------------------------------------------------------------------------------
+
+COMPARISON_ESTIMATORS = [
+    "naive_difference",
+    "oracle_ipw",
+    "outcome_regression",
+    "ipw_ate",
+    "aipw",
+    "dml_irm",
+    "ipw_att",
+    "matching_nn",
+]
+
+
+def _fmt_effect(value: float, outcome: str) -> str:
+    return f"{value:.3f}" if outcome == "spend" else f"{value * 100:.2f} pp"
+
+
+def _comparison_markdown(inputs: dict, display: pd.DataFrame, performance: pd.DataFrame) -> str:
+    spec, provenance = inputs["spec"], inputs["provenance"]
+    draw = spec["randomness"]["fixed_display_draw"]
+    lines = [
+        "# Part II — Estimator comparison against the experimental benchmark",
+        "",
+        f"Frozen specification v{spec['meta']['benchmark_version']} (sha256 "
+        f"{provenance['benchmark']['sha256'][:12]}…), "
+        f"base seed {provenance['benchmark']['base_seed']}, {provenance['benchmark']['n_draws']} draws; "
+        "processed "
+        f"data sha256 {provenance['data']['processed_sha256'][:12]}…. All inputs share this provenance.",
+        "",
+        "Every observational estimate is compared with the experimental benchmark for its **own** estimand: "
+        "ATE "
+        "estimators with the randomized difference in means on the full pair, ATT estimators with the "
+        "randomized pair weighted by the design propensity e*(x). The naive difference estimates no causal "
+        "estimand and is shown against the ATE. The oracle uses the true propensity and is a reference, not "
+        "an "
+        "option an analyst has.",
+        "",
+        f"## 1. One constructed observational dataset (display draw {draw}, primary outcome: spend)",
+        "",
+        "| Comparison | Scenario | Estimator | Estimand | Estimate | 95% CI | Benchmark | Error | CI covers "
+        "benchmark | Key assumptions |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    names = {
+        **viz.ESTIMATOR_DISPLAY,
+        "experiment": "Randomized experiment",
+        "experiment_att": "Experimental ATT benchmark",
+    }
+    for _, r in display[display["outcome"] == "spend"].iterrows():
+        error = (
+            "—"
+            if r["estimator"].startswith("experiment")
+            else f"{r['error_vs_benchmark']:+.3f} ({r['error_pct']:+.0%})"
+        )
+        covers = (
+            "—" if r["estimator"].startswith("experiment") else ("yes" if r["ci_covers_benchmark"] else "no")
+        )
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[r['comparison']]} | {r['scenario']} | {names[r['estimator']]} | "
+            f"{r['estimand']} "
+            f"| {r['estimate']:.3f} | [{r['ci_low']:.3f}, {r['ci_high']:.3f}] | {r['benchmark_value']:.3f} "
+            f"| {error} "
+            f"| {covers} | {r['key_assumptions']} |"
+        )
+    lines += [
+        "",
+        "A single dataset shows what an analyst would see; whether an estimate lands near the benchmark on "
+        "one "
+        "draw is partly luck. Section 2 characterizes each estimator over all draws.",
+        "",
+        "## 2. Performance over all draws",
+        "",
+        "| Comparison | Scenario | Outcome | Estimator | Estimand → benchmark | Bias % (±2 MC SE) | "
+        "Unbiased within "
+        "MC error | RMSE % | Coverage (oracle) | SE / SD | Failures |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for _, s in performance[performance["outcome"].isin(["spend", "visit"])].iterrows():
+        half = 2 * s["bias_mc_se"] / abs(s["benchmark_value"])
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[s['comparison']]} | {s['scenario']} | {s['outcome']} "
+            f"| {viz.ESTIMATOR_DISPLAY[s['estimator']]} | {s['estimand']} → {s['benchmark']} "
+            f"| {s['bias_pct']:+.1%} (±{half:.1%}) | {'yes' if s['unbiased_within_mc_error'] else 'no'} "
+            f"| {s['rmse'] / abs(s['benchmark_value']):.0%} | {s['coverage']:.3f} "
+            f"({s['oracle_coverage']:.3f}) "
+            f"| {s['se_to_sd_ratio']:.2f} | {s['failure_rate']:.0%} |"
+        )
+    lines += [
+        "",
+        "Coverage is measured against the finite-population benchmark; the oracle's coverage in parentheses "
+        "is "
+        "the calibration reference (see the construction report). Conversion results are in "
+        "`performance.csv`.",
+        "",
+        "## 3. Which assumptions each estimator needs",
+        "",
+        "| Estimator | Key assumptions |",
+        "|---|---|",
+    ]
+    for name in COMPARISON_ESTIMATORS:
+        lines.append(f"| {viz.ESTIMATOR_DISPLAY[name]} | {ASSUMPTIONS[name]} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def run_comparison_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
+    from causeway.comparison import display_table, load_comparison_inputs, performance_table
+
+    paths = paths or DataPaths()
+    inputs = load_comparison_inputs(paths)
+    draw = inputs["spec"]["randomness"]["fixed_display_draw"]
+    display = display_table(inputs["estimates"], inputs["benchmarks"], inputs["experiment_effects"], draw)
+    performance = performance_table(inputs["estimates"], inputs["benchmarks"])
+    targets = inputs["benchmarks"].rename(columns={"estimand": "benchmark", "value": "benchmark_value"})
+    relative = inputs["estimates"].merge(
+        targets[["comparison", "scenario", "outcome", "benchmark", "benchmark_value"]],
+        on=["comparison", "scenario", "outcome", "benchmark"],
+    )
+    relative["relative_error"] = (relative["estimate"] - relative["benchmark_value"]) / relative[
+        "benchmark_value"
+    ]
+
+    results_dir = paths.root / "reports" / "results" / "comparison"
+    figures_dir = paths.root / "reports" / "figures" / "comparison"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    tables = {"display_draw": display, "performance": performance}
+    for name, table in tables.items():
+        table.to_csv(results_dir / f"{name}.csv", index=False)
+    figures = []
+    for outcome in ("spend", "visit"):
+        figures += [
+            viz.comparison_forest(display, outcome, figures_dir / f"forest_display_draw_{outcome}.png"),
+            viz.bias_rmse_summary(
+                performance, outcome, figures_dir / f"bias_rmse_{outcome}.png", COMPARISON_ESTIMATORS
+            ),
+            viz.estimator_error_grid(
+                relative,
+                outcome,
+                figures_dir / f"sampling_distributions_{outcome}.png",
+                COMPARISON_ESTIMATORS,
+            ),
+        ]
+    report_path = results_dir / "comparison_report.md"
+    report_path.write_text(_comparison_markdown(inputs, display, performance))
+    write_provenance(results_dir, paths, inputs["spec"])
     return BenchmarkOutputs(tables, figures, report_path)

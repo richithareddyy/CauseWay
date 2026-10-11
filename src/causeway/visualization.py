@@ -323,6 +323,7 @@ SCENARIO_STYLE = {
     "B": {"label": "Scenario B: strong selection", "color": "#4a3aa7", "filled": True},
 }
 ORACLE_COLOR = "#4a3aa7"
+STATUS_CRITICAL = "#d03b3b"  # reserved status colour; always explained in the figure text
 
 
 def selection_love_plot(balance: pd.DataFrame, path: Path, threshold: float = 0.1) -> Path:
@@ -679,6 +680,166 @@ def estimator_error_grid(relative: pd.DataFrame, outcome: str, path: Path, estim
         "Each estimator is compared with the experimental benchmark for its own estimand. "
         + "; ".join(f"{benchmark} benchmark: {', '.join(names)}" for benchmark, names in by_benchmark.items())
         + ".",
+    )
+    fig.tight_layout()
+    return save(fig, path)
+
+
+COMPARISON_GROUPS = {
+    "ATE": [
+        "experiment",
+        "naive_difference",
+        "oracle_ipw",
+        "outcome_regression",
+        "ipw_ate",
+        "aipw",
+        "dml_irm",
+    ],
+    "ATT": ["experiment_att", "ipw_att", "matching_nn"],
+}
+EXPERIMENT_LABELS = {
+    "experiment": "Randomized experiment (ATE)",
+    "experiment_att": "Experimental ATT benchmark",
+}
+
+
+def comparison_forest(table: pd.DataFrame, outcome: str, path: Path) -> Path:
+    """On one realized observational dataset, which estimates land near their own experimental benchmark?"""
+    apply_style()
+    comparisons = list(dict.fromkeys(table["comparison"]))
+    scenarios = ["A", "B", "C"]
+    rows = [(group, name) for group, names in COMPARISON_GROUPS.items() for name in names]
+    label, scale, _ = OUTCOME_AXIS[outcome]
+    fig, axes = plt.subplots(
+        len(comparisons), 3, figsize=(11.5, 0.27 * len(rows) * len(comparisons) + 2.2), sharey=True
+    )
+    for r, comparison in enumerate(comparisons):
+        for c, scenario in enumerate(scenarios):
+            ax = axes[r, c]
+            cell = table[
+                (table["comparison"] == comparison)
+                & (table["scenario"] == scenario)
+                & (table["outcome"] == outcome)
+            ].set_index("estimator")
+            for group, style in (("ATE", "-"), ("ATT", "--")):
+                members = [i for i, (g, _) in enumerate(rows) if g == group]
+                value = (
+                    cell.loc["experiment" if group == "ATE" else "experiment_att", "benchmark_value"] * scale
+                )
+                ax.plot(
+                    [value, value],
+                    [members[0] - 0.45, members[-1] + 0.45],
+                    color=INK_SECONDARY,
+                    lw=1,
+                    ls=style,
+                )
+            ax.axvline(0, color=AXIS, lw=0.8)
+            for i, (_, name) in enumerate(rows):
+                row = cell.loc[name]
+                if name.startswith("experiment"):
+                    color = INK
+                elif name == "naive_difference":
+                    color = INK_MUTED
+                elif name == "oracle_ipw":
+                    color = ORACLE_COLOR
+                else:
+                    color = CONTRAST_COLORS[comparison]
+                ax.plot(
+                    [row["ci_low"] * scale, row["ci_high"] * scale],
+                    [i, i],
+                    color=color,
+                    lw=2,
+                    solid_capstyle="round",
+                )
+                ax.plot(
+                    row["estimate"] * scale,
+                    i,
+                    "D" if name.startswith("experiment") else "o",
+                    color=color,
+                    ms=5,
+                    mec=SURFACE,
+                    mew=1,
+                )
+            ax.axhline(len(COMPARISON_GROUPS["ATE"]) - 0.5, color=GRID, lw=0.8)
+            ax.grid(axis="y", visible=False)
+            ax.set_title(f"{CONTRAST_LABELS[comparison]} · Scenario {scenario}", fontsize=8.5)
+            if r == len(comparisons) - 1:
+                ax.set_xlabel(
+                    label.replace("Mean two-week spend ($)", "Effect on spend ($ per customer)").replace(
+                        " rate (percentage points)", " effect (percentage points)"
+                    )
+                )
+    labels = [EXPERIMENT_LABELS.get(name, ESTIMATOR_DISPLAY.get(name, name)) for _, name in rows]
+    for ax in axes[:, 0]:
+        ax.set_yticks(range(len(rows)), labels, fontsize=7.5)
+        ax.set_ylim(len(rows) - 0.5, -0.5)
+    fig.suptitle(
+        f"{outcome.capitalize()}: estimates from one constructed observational dataset (display draw 0)",
+        x=0.0,
+        ha="left",
+        fontweight="bold",
+        fontsize=10,
+    )
+    _footnote(
+        fig,
+        "Upper block: estimators of the ATE, solid line = experimental ATE. Lower block: estimators of the "
+        "ATT, dashed line = experimental ATT (randomized pair weighted by e*). Intervals: 95%. The "
+        "display draw is fixed by the frozen specification, not chosen for appearance.",
+    )
+    fig.tight_layout()
+    return save(fig, path)
+
+
+def bias_rmse_summary(performance: pd.DataFrame, outcome: str, path: Path, estimators: list[str]) -> Path:
+    """Across 200 draws, how large is each estimator's bias relative to its total error (RMSE)?"""
+    apply_style()
+    comparisons = list(dict.fromkeys(performance["comparison"]))
+    rows = [(c, e) for c in comparisons for e in estimators]
+    fig, axes = plt.subplots(1, 3, figsize=(11, 0.3 * len(rows) + 1.9), sharey=True)
+    for ax, scenario in zip(axes, ["A", "B", "C"], strict=True):
+        ax.axvline(0, color=AXIS, lw=1)
+        for i, (comparison, estimator) in enumerate(rows):
+            row = performance[
+                (performance["comparison"] == comparison)
+                & (performance["scenario"] == scenario)
+                & (performance["outcome"] == outcome)
+                & (performance["estimator"] == estimator)
+            ].iloc[0]
+            benchmark = row["benchmark_value"]
+            rmse = 100 * row["rmse"] / abs(benchmark)
+            bias = 100 * row["bias"] / benchmark
+            half = 100 * 2 * row["bias_mc_se"] / abs(benchmark)
+            ax.barh(i, rmse, height=0.55, color=GRID, edgecolor=SURFACE)
+            color = INK if row["unbiased_within_mc_error"] else STATUS_CRITICAL
+            ax.plot([bias - half, bias + half], [i, i], color=color, lw=2, solid_capstyle="round")
+            ax.plot(bias, i, "o", color=color, ms=5, mec=SURFACE, mew=1)
+        ax.set_title(
+            {"A": "Scenario A: moderate", "B": "Scenario B: strong", "C": "Scenario C: recency hidden"}[
+                scenario
+            ],
+            fontsize=9,
+        )
+        ax.set_xlabel("% of matched benchmark")
+        ax.grid(axis="y", visible=False)
+        for boundary in range(len(estimators), len(rows), len(estimators)):
+            ax.axhline(boundary - 0.5, color=GRID, lw=0.8)
+    axes[0].set_yticks(
+        range(len(rows)),
+        [f"{CONTRAST_LABELS[c].split(' (')[0]} · {ESTIMATOR_DISPLAY[e]}" for c, e in rows],
+        fontsize=7.5,
+    )
+    axes[0].set_ylim(len(rows) - 0.5, -0.5)
+    fig.suptitle(
+        f"{outcome.capitalize()}: bias (dot, ±2 Monte Carlo SE) and RMSE (bar) across 200 draws",
+        x=0.0,
+        ha="left",
+        fontweight="bold",
+        fontsize=10,
+    )
+    _footnote(
+        fig,
+        "Red: bias larger than twice its Monte Carlo standard error. Grey bar: RMSE, which adds the "
+        "estimator's sampling variability to its bias. Each estimator against its own estimand's benchmark.",
     )
     fig.tight_layout()
     return save(fig, path)

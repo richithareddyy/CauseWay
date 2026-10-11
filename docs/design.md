@@ -365,7 +365,19 @@ The machine-readable specification is [`configs/benchmark/v1.toml`](../configs/b
 
 ---
 
-## 7. References
+## 7. Observations recorded after the Part I analysis (2026-10-11)
+
+These are recorded for the later milestones. None of them changes the frozen benchmark specification.
+
+1. **The covariates barely predict two-week spend.** In the control arm, no encoded covariate correlates with `spend` above |r| = 0.024. For `visit` the largest is |r| ≈ 0.09 (`newbie`, `recency`). As a result, Lin adjustment changes the spend standard error by less than 0.2%.
+   - **Implication for Part II:** confounding bias in the constructed benchmark comes from the selection covariates' association with the outcome. Because that association is weak for spend, the naive estimator's bias on spend may be small relative to its sampling variability, and differences between estimators may be hard to see on that outcome.
+   - The benchmark design is **not** changed because of this. The concern is raised for review before Milestone 4, and `visit` remains the pre-specified secondary outcome on which bias is expected to be larger.
+2. **Shape of the $499 boundary.** There are no purchasers in [$490, $499), only 2 in [$450, $490), and 12 at exactly $499.00. That makes $499 the second most frequent spend value after $29.99. The pattern is consistent with a constraint at $499, but the source gives no documentation, so it remains an observed maximum of unknown origin. The pre-registered sensitivity analyses (winsorized spend, excluding the $499 values) run in Milestone 9.
+3. **Heaping at $29.99.** 136 of 578 purchasers (23.5%) spent exactly $29.99, the same value as the `history` floor. This is plausibly a single-item price, but that is undocumented.
+
+---
+
+## 8. References
 
 These were verified against the publisher or author pages during this milestone:
 

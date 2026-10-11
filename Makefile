@@ -5,11 +5,12 @@ BIN    := $(VENV)/bin
 # because the OS marks files inside .venv as hidden.
 RUN    := PYTHONPATH=src $(BIN)/python -m causeway.cli
 
-.PHONY: help setup lock data env test lint format clean
+.PHONY: help setup lock data analysis env test lint format clean
 
 help:
 	@echo "setup   create .venv with Python 3.12 and install the pinned environment"
 	@echo "data    download (checksum-verified), validate and process the dataset"
+	@echo "analysis run the pre-specified analyses (Part I: randomized experiment)"
 	@echo "test    run the test suite"
 	@echo "lint    run ruff checks"
 	@echo "format  apply ruff formatting fixes"
@@ -34,6 +35,9 @@ lock: $(BIN)/python
 data:
 	$(RUN) data
 
+analysis:
+	$(RUN) experiment
+
 env:
 	$(RUN) env
 
@@ -49,4 +53,4 @@ format:
 	$(BIN)/ruff format src tests scripts
 
 clean:
-	find data/interim data/processed reports/validation -type f ! -name .gitkeep -delete
+	find data/interim data/processed reports/validation reports/results reports/figures -type f ! -name .gitkeep -delete

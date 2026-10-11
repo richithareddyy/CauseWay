@@ -17,6 +17,7 @@ from scipy import stats
 
 from causeway import schema
 from causeway.balance import standardized_mean_difference
+from causeway.features import covariate_matrix
 
 Status = Literal["pass", "warn", "fail", "info"]
 MISSING_TOKENS = {"", "NA", "NAN", "NULL", "NONE"}
@@ -103,22 +104,8 @@ def parse_raw_types(raw: pd.DataFrame) -> pd.DataFrame:
 
 
 def covariate_design(typed: pd.DataFrame) -> pd.DataFrame:
-    """Numeric encoding of the pre-treatment covariates used for balance diagnostics."""
-    zip_code = typed["zip_code"].map(schema.ZIP_CODE_NORMALIZATION)
-    return pd.DataFrame(
-        {
-            "recency": typed["recency"].astype(float),
-            "ln_history": np.log(typed["history"].astype(float)),
-            "mens": typed["mens"].astype(float),
-            "womens": typed["womens"].astype(float),
-            "newbie": typed["newbie"].astype(float),
-            "zip_urban": (zip_code == "Urban").astype(float),
-            "zip_rural": (zip_code == "Rural").astype(float),
-            "channel_web": (typed["channel"] == "Web").astype(float),
-            "channel_multichannel": (typed["channel"] == "Multichannel").astype(float),
-        },
-        index=typed.index,
-    )
+    """Shared covariate encoding, applied after normalising raw zip_code spellings."""
+    return covariate_matrix(typed.assign(zip_code=typed["zip_code"].map(schema.ZIP_CODE_NORMALIZATION)))
 
 
 def validate_raw(raw: pd.DataFrame, expected_rows: int | None = None) -> ValidationReport:

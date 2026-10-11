@@ -36,6 +36,16 @@ def _data(_: argparse.Namespace) -> int:
     return 0
 
 
+def _experiment(_: argparse.Namespace) -> int:
+    from causeway.reporting import run_experiment_report
+
+    outputs = run_experiment_report()
+    print(f"report   {outputs.report_path}")
+    for figure in outputs.figures:
+        print(f"figure   {figure}")
+    return 0
+
+
 def _env(_: argparse.Namespace) -> int:
     print(json.dumps(environment(), indent=2))
     return 0
@@ -46,6 +56,9 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("data", help="download, verify, validate and process the dataset").set_defaults(
         func=_data
+    )
+    commands.add_parser("experiment", help="Part I: analyse the randomized experiment").set_defaults(
+        func=_experiment
     )
     commands.add_parser("env", help="print Python and dependency versions").set_defaults(func=_env)
     args = parser.parse_args(argv)

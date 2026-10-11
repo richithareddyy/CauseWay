@@ -1,0 +1,81 @@
+# Milestone 8 analysis plan: heterogeneous treatment effects and targeting, on the randomized experiment.
+#
+# Written and committed before any heterogeneity or targeting result was computed. Rationale:
+# docs/design.md, Sections 2.6, 2.13 and 9. The estimand throughout is the ITT effect of assignment.
+
+[meta]
+version = "1.0.0"
+created = "2026-10-11"
+status = "frozen"
+
+[randomness]
+base_seed = 20080320
+# numpy.random.SeedSequence(entropy=base_seed, spawn_key=(stream, contrast_index, outcome_index, split)).
+blp_stream = 2000
+forest_stream = 2001
+policy_stream = 2002
+
+[scope]
+contrasts = ["mens_vs_control", "womens_vs_control"]
+outcomes = ["spend", "visit", "conversion"]     # spend primary; visit and conversion secondary
+covariates = ["ln_history", "recency", "mens", "womens", "newbie", "zip_urban", "zip_rural", "channel_web", "channel_multichannel"]
+
+# ---------------------------------------------------------------------------------------------------
+# 1. Formal heterogeneity test (run first): Chernozhukov, Demirer, Duflo & Fernandez-Val (2018),
+#    "Generic Machine Learning Inference on Heterogeneous Treatment Effects in Randomized Experiments"
+# ---------------------------------------------------------------------------------------------------
+[blp]
+n_splits = 100                     # repeated random half-splits (fixed from runtime, before results)
+auxiliary_share = 0.5
+propensity = "known by design: the treated arm's share of the pair"
+cate_proxy = "EconML CausalForestDML fitted on the auxiliary half"
+baseline_proxy = "HistGradientBoostingRegressor of Y on X among auxiliary-half controls"
+regression = "Y = a1 + a2 B(X) + b1 (T - p) + b2 (T - p)(S(X) - mean S) + e, HC1 SEs, on the main half"
+gates_groups = 5                   # quintiles of S(X) in the main half
+clan_groups = ["most affected (top quintile)", "least affected (bottom quintile)"]
+aggregation = "median over splits; p-values 2 x median (capped at 1); intervals = medians of per-split bounds at level 1 - alpha/2, giving at least 1 - alpha coverage"
+alpha = 0.05
+heterogeneity_evidence = "b2 > 0 with split-adjusted p < 0.05, AND GATES top-minus-bottom interval excluding 0"
+
+[causal_forest]
+n_estimators = 500
+min_samples_leaf = 100
+honest = true
+nuisance_outcome = "HistGradientBoostingRegressor (default hyperparameters)"
+nuisance_treatment = "DummyClassifier(prior): the propensity is known and constant within a pair"
+cross_fitting_folds = 5
+
+# ---------------------------------------------------------------------------------------------------
+# 2. Pre-specified segments (exploratory unless the formal test supports heterogeneity)
+# ---------------------------------------------------------------------------------------------------
+[segments]
+variables = ["history_segment", "recency_band", "channel", "newbie", "zip_code", "mens", "womens"]
+estimator = "difference in means within each level, Neyman SE"
+equality_test = "Wald chi-square test that every level of a variable has the same effect"
+multiplicity = "Benjamini-Hochberg across the 7 equality tests, and separately across all level-specific effects, within each contrast and outcome"
+classification = [
+    "benefit: BH q < 0.05 and estimate > 0",
+    "harm: BH q < 0.05 and estimate < 0",
+    "inconclusive: otherwise (reported with its 95% CI and minimum detectable effect)",
+]
+mde_power = 0.80
+
+# ---------------------------------------------------------------------------------------------------
+# 3. Targeting (estimated policy value on held-out data; never mixed with realized outcomes)
+# ---------------------------------------------------------------------------------------------------
+[targeting]
+outcome = "spend"                  # incremental two-week revenue per customer; no cost or margin data exist
+secondary_outcome = "visit"
+cross_fitting_folds = 5            # CATE models trained on 4 folds, policies scored on the held-out fold
+policy_value = "inverse probability weighting with the known arm shares on held-out customers"
+policies = [
+    "treat none",
+    "treat all with Mens E-Mail",
+    "treat all with Womens E-Mail",
+    "random assignment (each e-mail arm with probability 1/2)",
+    "model-based: top fraction by estimated CATE, per e-mail",
+    "model-based best arm: argmax of {0, CATE_mens(x), CATE_womens(x)}",
+]
+budget_fraction = 0.15625          # 10,000 of 64,000 customers, the budget in the original challenge
+uplift_curve = "cumulative IPW incremental spend by fraction targeted, held-out predictions only"
+interpretation_rule = "model-based targeting is reported as better than treating everyone only if the 95% interval of the difference in policy value excludes 0"

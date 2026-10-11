@@ -268,3 +268,253 @@ def run_experiment_report(paths: DataPaths | None = None) -> ExperimentOutputs:
     report_path = results_dir / "experiment_report.md"
     report_path.write_text(_markdown_report(tables, plan, boundary, env))
     return ExperimentOutputs(results, tables, boundary, figures, report_path)
+
+
+# --------------------------------------------------------------------------------------------------
+# Part II: constructed observational benchmark
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass
+class BenchmarkOutputs:
+    tables: dict[str, pd.DataFrame]
+    figures: list[Path]
+    report_path: Path
+
+
+def _benchmark_markdown(spec: dict, tables: dict[str, pd.DataFrame], env: dict) -> str:
+    guard, checks, targets = tables["overlap_guard"], tables["construction_checks"], tables["benchmarks"]
+    decomposition, summary = tables["bias_decomposition"], tables["monte_carlo_summary"]
+    lines = [
+        "# Part II — Constructed observational benchmark: construction and naive bias",
+        "",
+        f"Specification: `configs/benchmark/v{spec['meta']['benchmark_version'].split('.')[0]}.toml` "
+        f"(version {spec['meta']['benchmark_version']}, frozen {spec['meta']['frozen_on']}; "
+        "checksum verified "
+        f"at load). Base seed {spec['randomness']['base_seed']}, {spec['randomness']['n_draws']} draws per "
+        f"comparison and scenario. Python {env['python']}.",
+        "",
+        "The retained samples are constructed from the randomized experiment. They are not Hillstrom's own "
+        "data-generating process: treatment in them depends on covariates only because the benchmark design "
+        "makes it so.",
+        "",
+        "## 1. Overlap guard (covariate-only, run before any outcome was used)",
+        "",
+        "| Comparison | Scenario | k | alpha | min e* | max e* | Share outside [0.01, 0.99] | Guard |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for _, g in guard.iterrows():
+        verdict = "passed" if g["passed"] is True else ("not applicable" if g["passed"] is None else "FAILED")
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[g['comparison']]} | {g['scenario']} | {g['k']:.1f} | {g['alpha']:.4f} | "
+            f"{g['e_star_min']:.4f} | {g['e_star_max']:.4f} | {g['share_outside_bounds']:.2%} | {verdict} |"
+        )
+    lines += [
+        "",
+        "## 2. Is the construction valid?",
+        "",
+        "Rejection sampling should (i) leave the covariate distribution unchanged, (ii) make "
+        "P(T=1 | X) equal the design propensity in the retained sample, and (iii) let an estimator "
+        "that knows e*(x) recover the "
+        "experimental benchmark.",
+        "",
+        "| Comparison | Scenario | Mean retention (expected 1/M) | Treated share "
+        "| max \\|SMD\\| retained vs full "
+        "pair: mean (max) | Mean max \\|SMD\\| treated vs control |",
+        "|---|---|---|---|---|---|",
+    ]
+    for _, r in checks.iterrows():
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[r['comparison']]} | {r['scenario']} | {r['retention']:.4f} "
+            f"({r['expected_retention']:.4f}) | {r['treated_share']:.4f} | {r['preservation_smd_mean']:.4f} "
+            f"({r['preservation_smd_max']:.4f}) | {r['imbalance_smd_mean']:.3f} |"
+        )
+    lines += [
+        "",
+        "Logistic regression of T on the four selection terms in the retained samples (mean over draws) "
+        "against the frozen design:",
+        "",
+        "| Comparison | Scenario | Term | Design value | Mean recovered |",
+        "|---|---|---|---|---|",
+    ]
+    for _, r in tables["coefficient_recovery"].iterrows():
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[r['comparison']]} | {r['scenario']} | {r['term']} | "
+            f"{r['design_value']:.3f} | {r['mean_recovered']:.3f} |"
+        )
+    lines += [
+        "",
+        "## 3. Experimental benchmarks (full randomized pair)",
+        "",
+        "Each estimator is compared with the benchmark for its own estimand. ATT and ATC weight the "
+        "randomized pair by e*(x) and 1 - e*(x); they differ from the ATE when effects vary with the "
+        "selection covariates.",
+        "",
+        "| Comparison | Scenario | Outcome | Estimand | Value | SE | Units |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for _, b in targets.iterrows():
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[b['comparison']]} | {b['scenario']} | {b['outcome']} "
+            f"| {b['estimand']} | "
+            f"{b['value']:.4f} | {b['se']:.4f} | {b['n_units']:,} |"
+        )
+    lines += [
+        "",
+        "## 4. What the naive comparison targets, and why it is biased",
+        "",
+        "Exact finite-population identity: naive target − ATE = baseline (selection) bias + (ATT − ATE).",
+        "",
+        "| Comparison | Scenario | Outcome | ATE | Naive target | Bias vs ATE | Baseline bias | ATT − ATE |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for _, d in decomposition.iterrows():
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[d['comparison']]} | {d['scenario']} | {d['outcome']} | {d['ate']:.4f} | "
+            f"{d['naive_target']:.4f} | {d['bias_vs_ate']:+.4f} | {d['baseline_bias']:+.4f} | "
+            f"{d['heterogeneity_term']:+.4f} |"
+        )
+    lines += [
+        "",
+        "## 5. Naive and oracle estimates across the Monte Carlo draws",
+        "",
+        "| Comparison | Scenario | Outcome | Estimator | Estimand → benchmark | Bias (MC SE) "
+        "| Bias % of benchmark | "
+        "RMSE | Coverage | SE / empirical SD | Failures |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for _, s in summary.iterrows():
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[s['comparison']]} | {s['scenario']} | {s['outcome']} "
+            f"| {s['estimator']} | "
+            f"{s['estimand']} → {s['benchmark']} | {s['bias']:+.4f} ({s['bias_mc_se']:.4f}) | "
+            f"{s['bias'] / s['benchmark_value']:+.0%} | {s['rmse']:.4f} | {s['coverage']:.3f} | "
+            f"{s['se_to_sd_ratio']:.2f} | {s['failure_rate']:.0%} |"
+        )
+    lines += [
+        "",
+        "**Reading coverage.** Every retained sample is a subset of the same trial, so estimates vary less "
+        "around the full-pair benchmark than their nominal standard errors assume (SE / empirical SD > 1). "
+        "Coverage against this finite-population benchmark is therefore not the nominal 95%; the oracle's "
+        "coverage is the calibration reference for every later estimator. Where SE / SD < 1 (oracle, "
+        "Scenario B), the influence-function standard error understates the variability created by extreme "
+        "weights.",
+        "",
+        "**Scenario C** retains exactly the same units as Scenario A (shared uniforms and selection "
+        "strength). "
+        "It differs only in what the analyst may adjust for (`recency` is hidden), which does not affect the "
+        "naive or oracle estimators, so their Scenario A results apply to it unchanged.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def run_benchmark_construction_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
+    from causeway.benchmark import monte_carlo_summary, naive_bias_decomposition, run_construction_study
+    from causeway.config import load_benchmark_config
+
+    paths = paths or DataPaths()
+    spec = load_benchmark_config(1)
+    frame = load_processed(paths)
+    study = run_construction_study(frame, spec)
+    base_seed = spec["randomness"]["base_seed"]
+    display = spec["randomness"]["fixed_display_draw"]
+
+    draws = study.draws
+    checks = (
+        draws.groupby(["comparison", "scenario"], sort=False)
+        .agg(
+            retention=("retention", "mean"),
+            treated_share=("treated_share", "mean"),
+            preservation_smd_mean=("max_abs_smd_vs_full_pair", "mean"),
+            preservation_smd_max=("max_abs_smd_vs_full_pair", "max"),
+            imbalance_smd_mean=("max_abs_smd_treated_vs_control", "mean"),
+        )
+        .reset_index()
+    )
+    checks["expected_retention"] = [
+        1 / study.pairs[c].designs[s].m for c, s in zip(checks["comparison"], checks["scenario"], strict=True)
+    ]
+    recovery_rows = []
+    for (comparison, scenario), group in draws.groupby(["comparison", "scenario"], sort=False):
+        design = study.pairs[comparison].designs[scenario]
+        values = {
+            "intercept": design.alpha,
+            **{t["name"]: design.k * t["coefficient"] for t in spec["selection"]["terms"]},
+        }
+        recovery_rows += [
+            {
+                "comparison": comparison,
+                "scenario": scenario,
+                "term": term,
+                "design_value": value,
+                "mean_recovered": group[f"recovered_{term}"].mean(),
+            }
+            for term, value in values.items()
+        ]
+
+    balance_rows = []
+    for name, pair in study.pairs.items():
+        for column in pair.covariates.columns:
+            balance_rows.append(
+                {
+                    "comparison": name,
+                    "state": "randomized",
+                    "covariate": column,
+                    "smd": standardized_mean_difference(
+                        pair.covariates.loc[pair.treated, column], pair.covariates.loc[~pair.treated, column]
+                    ),
+                }
+            )
+    shown = study.balance[study.balance["draw"] == display].rename(columns={"scenario": "state"})
+    balance_display = pd.concat(
+        [pd.DataFrame(balance_rows), shown[["comparison", "state", "covariate", "smd"]]], ignore_index=True
+    )
+
+    overlap_panels = []
+    for name, pair in study.pairs.items():
+        for scenario in ("A", "B"):
+            keep = pair.retained(scenario, display, base_seed)
+            e = pair.designs[scenario].e_star
+            overlap_panels.append(
+                {
+                    "comparison": name,
+                    "scenario": scenario,
+                    "e_treated": e[keep & pair.treated],
+                    "e_control": e[keep & ~pair.treated],
+                }
+            )
+
+    ate = study.benchmarks[study.benchmarks["estimand"] == "ATE"][
+        ["comparison", "scenario", "outcome", "value"]
+    ]
+    relative = study.estimates.merge(ate, on=["comparison", "scenario", "outcome"])
+    relative["relative_error"] = (relative["estimate"] - relative["value"]) / relative["value"]
+
+    tables = {
+        "overlap_guard": study.guard,
+        "construction_checks": checks,
+        "coefficient_recovery": pd.DataFrame(recovery_rows),
+        "benchmarks": study.benchmarks,
+        "bias_decomposition": pd.concat(
+            [naive_bias_decomposition(p, spec) for p in study.pairs.values()], ignore_index=True
+        ),
+        "monte_carlo_summary": monte_carlo_summary(study.estimates, study.benchmarks),
+        "draws": draws,
+        "estimates": study.estimates,
+    }
+    results_dir = paths.root / "reports" / "results" / "benchmark"
+    figures_dir = paths.root / "reports" / "figures" / "benchmark"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    for name, table in tables.items():
+        table.to_csv(results_dir / f"{name}.csv", index=False)
+
+    figures = [
+        viz.selection_love_plot(balance_display, figures_dir / "selection_imbalance.png"),
+        viz.design_propensity_overlap(overlap_panels, figures_dir / "design_propensity_overlap.png"),
+        viz.naive_vs_oracle(relative, figures_dir / "naive_vs_oracle_bias.png"),
+    ]
+    env = environment()
+    report_path = results_dir / "benchmark_construction_report.md"
+    report_path.write_text(_benchmark_markdown(spec, tables, env))
+    return BenchmarkOutputs(tables, figures, report_path)

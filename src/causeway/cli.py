@@ -46,6 +46,16 @@ def _experiment(_: argparse.Namespace) -> int:
     return 0
 
 
+def _benchmark(_: argparse.Namespace) -> int:
+    from causeway.reporting import run_benchmark_construction_report
+
+    outputs = run_benchmark_construction_report()
+    print(f"report   {outputs.report_path}")
+    for figure in outputs.figures:
+        print(f"figure   {figure}")
+    return 0
+
+
 def _env(_: argparse.Namespace) -> int:
     print(json.dumps(environment(), indent=2))
     return 0
@@ -60,6 +70,9 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("experiment", help="Part I: analyse the randomized experiment").set_defaults(
         func=_experiment
     )
+    commands.add_parser(
+        "benchmark", help="Part II: construct and check the observational benchmark"
+    ).set_defaults(func=_benchmark)
     commands.add_parser("env", help="print Python and dependency versions").set_defaults(func=_env)
     args = parser.parse_args(argv)
     return args.func(args)

@@ -315,3 +315,147 @@ def bootstrap_distributions(
     _footnote(fig, "Solid vertical lines: 95% normal-theory interval. Dotted: 95% BCa bootstrap interval.")
     fig.tight_layout()
     return save(fig, path)
+
+
+SCENARIO_STYLE = {
+    "randomized": {"label": "Randomized pair (no selection)", "color": INK_MUTED, "filled": False},
+    "A": {"label": "Scenario A: moderate selection", "color": INK, "filled": True},
+    "B": {"label": "Scenario B: strong selection", "color": "#4a3aa7", "filled": True},
+}
+ORACLE_COLOR = "#4a3aa7"
+
+
+def selection_love_plot(balance: pd.DataFrame, path: Path, threshold: float = 0.1) -> Path:
+    """How much covariate imbalance does the constructed selection create? (fixed display draw)"""
+    apply_style()
+    comparisons = list(dict.fromkeys(balance["comparison"]))
+    covariates = list(dict.fromkeys(balance["covariate"]))
+    fig, axes = plt.subplots(1, len(comparisons), figsize=(10, 0.32 * len(covariates) + 1.6), sharey=True)
+    offsets = {"randomized": -0.2, "A": 0.0, "B": 0.2}
+    for ax, comparison in zip(np.atleast_1d(axes), comparisons, strict=True):
+        ax.axvspan(-threshold, threshold, color=GRID, alpha=0.5, lw=0)
+        ax.axvline(0, color=AXIS, lw=1)
+        sub = balance[balance["comparison"] == comparison]
+        for state, style in SCENARIO_STYLE.items():
+            rows = sub[sub["state"] == state]
+            y = [covariates.index(c) + offsets[state] for c in rows["covariate"]]
+            ax.scatter(
+                rows["smd"],
+                y,
+                s=34,
+                label=style["label"],
+                zorder=3,
+                linewidth=1.2,
+                facecolor=style["color"] if style["filled"] else SURFACE,
+                edgecolor=style["color"],
+            )
+        ax.set_title(CONTRAST_LABELS[comparison], fontsize=9)
+        ax.set_xlabel("Standardized mean difference (treated minus control)")
+        ax.grid(axis="y", visible=False)
+    first = np.atleast_1d(axes)[0]
+    first.set_yticks(range(len(covariates)), [COVARIATE_LABELS.get(c, c) for c in covariates])
+    first.invert_yaxis()
+    handles, labels = first.get_legend_handles_labels()
+    fig.suptitle(
+        "Covariate imbalance created by the constructed selection (display draw 0)",
+        x=0.0,
+        ha="left",
+        fontweight="bold",
+        fontsize=10,
+    )
+    fig.legend(handles, labels, loc="upper left", bbox_to_anchor=(0.0, 0.95), ncol=3, fontsize=7.5)
+    _footnote(
+        fig,
+        f"Shaded band: |SMD| < {threshold}. Selection uses past-year spend, recency, multichannel and "
+        "newbie only; the other covariates become imbalanced through their correlation with these.",
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    return save(fig, path)
+
+
+def design_propensity_overlap(panels: list[dict], path: Path) -> Path:
+    """Do treated and control customers overlap in the true design propensity e*(x)?"""
+    apply_style()
+    fig, axes = plt.subplots(2, 2, figsize=(10, 5.2), sharex=True)
+    bins = np.linspace(0, 1, 41)
+    for ax, panel in zip(axes.ravel(), panels, strict=True):
+        treated_arm = "Mens E-Mail" if panel["comparison"].startswith("mens") else "Womens E-Mail"
+        for label, values, color in (
+            (f"{treated_arm} (retained)", panel["e_treated"], ARM_COLORS[treated_arm]),
+            ("No E-Mail (retained)", panel["e_control"], ARM_COLORS["No E-Mail"]),
+        ):
+            ax.hist(values, bins=bins, histtype="step", lw=2, color=color, label=label)
+        ax.set_title(f"{CONTRAST_LABELS[panel['comparison']]} · Scenario {panel['scenario']}", fontsize=9)
+        ax.grid(axis="x", visible=False)
+        ax.legend(loc="upper center", fontsize=7)
+    for ax in axes[1]:
+        ax.set_xlabel("True design propensity e*(x)")
+    for ax in axes[:, 0]:
+        ax.set_ylabel("Retained customers")
+    fig.suptitle(
+        "Overlap of the design propensity in the retained sample (display draw 0)",
+        x=0.0,
+        ha="left",
+        fontweight="bold",
+        fontsize=10,
+    )
+    _footnote(
+        fig,
+        "e*(x) is the propensity fixed by the benchmark design, known only because the selection was "
+        "constructed. Estimated propensities are examined in Milestone 5.",
+    )
+    fig.tight_layout()
+    return save(fig, path)
+
+
+def naive_vs_oracle(summary_draws: pd.DataFrame, path: Path) -> Path:
+    """How biased is the naive comparison under the constructed selection, and does the oracle remove it?"""
+    apply_style()
+    keys = summary_draws[["comparison", "scenario", "outcome"]].drop_duplicates().itertuples(index=False)
+    rows = list(keys)
+    fig, ax = plt.subplots(figsize=(8, 0.34 * len(rows) + 1.4))
+    ax.axvline(0, color=AXIS, lw=1)
+    for i, (comparison, scenario, outcome) in enumerate(rows):
+        sub = summary_draws[
+            (summary_draws["comparison"] == comparison)
+            & (summary_draws["scenario"] == scenario)
+            & (summary_draws["outcome"] == outcome)
+        ]
+        for estimator, color, offset in (
+            ("naive_difference", INK_SECONDARY, -0.15),
+            ("oracle_ipw", ORACLE_COLOR, 0.15),
+        ):
+            rel = sub.loc[sub["estimator"] == estimator, "relative_error"] * 100
+            low, mid, high = np.percentile(rel, [2.5, 50, 97.5])
+            ax.plot([low, high], [i + offset] * 2, color=color, lw=2, solid_capstyle="round")
+            ax.plot(
+                mid,
+                i + offset,
+                "o",
+                color=color,
+                ms=5,
+                mec=SURFACE,
+                mew=1,
+                label={"naive_difference": "Naive difference", "oracle_ipw": "Oracle IPW (true e*)"}[
+                    estimator
+                ]
+                if i == 0
+                else None,
+            )
+    ax.set_yticks(
+        range(len(rows)),
+        [f"{CONTRAST_LABELS[c].split(' (')[0]} · {s} · {o}" for c, s, o in rows],
+        fontsize=7.5,
+    )
+    ax.set_ylim(len(rows) - 0.5, -0.5)
+    ax.set_xlabel("Error relative to the experimental ATE benchmark (% of benchmark)")
+    ax.grid(axis="y", visible=False)
+    ax.legend(loc="lower right", fontsize=7.5)
+    ax.set_title("Naive and oracle estimates across 200 constructed samples (median, 2.5-97.5 percentiles)")
+    _footnote(
+        fig,
+        "Benchmark: difference in means on the full randomized pair. The oracle uses the true design "
+        "propensity and checks the construction; it is not available to an analyst.",
+    )
+    fig.tight_layout()
+    return save(fig, path)

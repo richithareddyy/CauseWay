@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -65,6 +66,20 @@ def load_data_config(path: Path = CONFIG_DIR / "data.toml") -> DataConfig:
     )
 
 
+# Checksums recorded when each benchmark specification was frozen (line endings normalised to LF).
+FROZEN_BENCHMARK_SHA256 = {1: "d88ce1a03de54eed5c8a38e095a49d01c0e07f0d12f95e66d3554f23b6f6697e"}
+
+
+class FrozenSpecificationError(RuntimeError):
+    """A frozen benchmark specification no longer matches the checksum recorded at freeze time."""
+
+
 def load_benchmark_config(version: int = 1) -> dict:
-    """Load a frozen benchmark specification by version number."""
-    return tomllib.loads((CONFIG_DIR / "benchmark" / f"v{version}.toml").read_text())
+    """Load a frozen benchmark specification, refusing one that changed after it was frozen."""
+    raw = (CONFIG_DIR / "benchmark" / f"v{version}.toml").read_bytes().replace(b"\r\n", b"\n")
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != FROZEN_BENCHMARK_SHA256.get(version):
+        raise FrozenSpecificationError(
+            f"benchmark v{version} has sha256 {digest}, not the frozen value; create a new version instead"
+        )
+    return tomllib.loads(raw.decode())

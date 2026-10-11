@@ -10,7 +10,7 @@ RUN    := PYTHONPATH=src $(BIN)/python -m causeway.cli
 help:
 	@echo "setup   create .venv with Python 3.12 and install the pinned environment"
 	@echo "data    download (checksum-verified), validate and process the dataset"
-	@echo "analysis run the pre-specified analyses (Part I: randomized experiment)"
+	@echo "analysis run the pre-specified analyses (Part I experiment; Part II benchmark)"
 	@echo "test    run the test suite"
 	@echo "lint    run ruff checks"
 	@echo "format  apply ruff formatting fixes"
@@ -37,6 +37,7 @@ data:
 
 analysis:
 	$(RUN) experiment
+	$(RUN) benchmark
 
 env:
 	$(RUN) env

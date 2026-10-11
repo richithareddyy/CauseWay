@@ -375,6 +375,9 @@ These are recorded for the later milestones. None of them changes the frozen ben
 2. **Shape of the $499 boundary.** There are no purchasers in [$490, $499), only 2 in [$450, $490), and 12 at exactly $499.00. That makes $499 the second most frequent spend value after $29.99. The pattern is consistent with a constraint at $499, but the source gives no documentation, so it remains an observed maximum of unknown origin. The pre-registered sensitivity analyses (winsorized spend, excluding the $499 values) run in Milestone 9.
 3. **Heaping at $29.99.** 136 of 578 purchasers (23.5%) spent exactly $29.99, the same value as the `history` floor. This is plausibly a single-item price, but that is undocumented.
 
+4. **Resolution of observation 1 (Milestone 4, 2026-10-11).** The concern was that weak covariate–spend correlations would leave little confounding bias on spend. That did not happen. The frozen selection is strong (treated-vs-control |SMD| up to 0.83 in Scenario A), and the naive difference over-states the spend effect by about 48% of the benchmark for Mens and 57% for Womens (Scenario A), far beyond Monte Carlo error. The bias decomposes exactly into a baseline (selection) term and an effect-heterogeneity term (ATT − ATE); both are reported. The benchmark design remains unchanged.
+5. **Interpreting coverage in Part II.** Every constructed sample is a subset of the same trial. Estimates therefore vary less around the full-pair (finite-population) benchmark than their nominal standard errors assume. Raw coverage against that benchmark is not a nominal-95% quantity. Each estimator's coverage and SE-to-empirical-SD ratio will be read against the oracle IPW (true design propensity), which is the calibration reference. This changes how the metric is interpreted, not how it is defined in the frozen specification.
+
 ---
 
 ## 8. References

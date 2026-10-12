@@ -29,12 +29,9 @@ def att_weights(scores: np.ndarray, treated: np.ndarray) -> np.ndarray:
 def hajek_difference(
     y: np.ndarray, treated: np.ndarray, weights: np.ndarray, ci_level: float = 0.95
 ) -> WeightedEstimate:
-    """Difference of within-arm normalized (Hajek) weighted means.
+    """Difference of Hajek-normalised weighted means.
 
-    The standard error is the influence-function (linearization) form that treats the weights as fixed.
-    With a propensity estimated by maximum likelihood this is conservative for the ATE (Hirano, Imbens
-    and Ridder, 2003); for the ATT it can be anti-conservative. Coverage is checked empirically across
-    the Monte Carlo draws.
+    The SE treats the weights as fixed, which is conservative for the ATE when the propensity is estimated.
     """
     y = np.asarray(y, dtype=float)
     t = np.asarray(treated, dtype=bool)

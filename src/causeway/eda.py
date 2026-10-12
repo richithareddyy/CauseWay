@@ -12,11 +12,7 @@ OUTCOMES = ["spend", "visit", "conversion"]
 
 
 def outcome_summary(frame: pd.DataFrame) -> pd.DataFrame:
-    """Per-arm outcome rates and the shape of the spend distribution.
-
-    Statistics conditional on conversion are descriptive only: conversion is itself affected by
-    assignment, so comparing converters across arms is not a causal comparison.
-    """
+    """Outcome rates and the spend distribution by arm. Spend among converters is descriptive only."""
     rows = []
     for arm in schema.ARMS:
         group = frame[frame["segment"] == arm]
@@ -41,11 +37,7 @@ def outcome_summary(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def spend_boundary(frame: pd.DataFrame, bins: list[list[float]]) -> dict:
-    """Inspect the upper tail of spend around the observed maximum.
-
-    Reports the maximum, how many customers reach it, counts in bands just below it, the most frequent
-    spend values (heaping), and the arm distribution of customers at the maximum.
-    """
+    """Upper tail of spend around the observed maximum."""
     positive = frame.loc[frame["spend"] > 0]
     maximum = float(positive["spend"].max())
     at_max = positive[positive["spend"] == maximum]
@@ -89,11 +81,7 @@ def covariate_correlations(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def prognostic_correlations(frame: pd.DataFrame) -> pd.DataFrame:
-    """Correlation of each covariate with each outcome in the control arm.
-
-    Measured among untreated customers, these show how strongly the covariates predict outcomes in the
-    absence of the campaign, which determines how much regression adjustment can improve precision.
-    """
+    """Correlation of each covariate with each outcome among controls."""
     control = frame[frame["segment"] == schema.CONTROL_ARM]
     covariates = covariate_matrix(control)
     return pd.DataFrame(

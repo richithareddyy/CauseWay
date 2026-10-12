@@ -1,4 +1,4 @@
-"""Milestone 7 comparison: provenance checks, completeness, estimand alignment and table construction."""
+"""Estimator comparison: provenance checks, completeness, estimand alignment and tables."""
 
 import json
 

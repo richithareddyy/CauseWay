@@ -1,9 +1,4 @@
-"""Monte Carlo evaluation of observational estimators on the constructed benchmark.
-
-Every estimator sees only what an analyst would: the retained sample's outcomes, treatment and the
-scenario's analyst covariates. The true design propensity is passed separately and used only by the
-oracle reference and by diagnostics that compare an estimate with the truth.
-"""
+"""Monte Carlo runner that applies estimators to every constructed sample."""
 
 from __future__ import annotations
 
@@ -253,11 +248,7 @@ def run_estimator_study(
     n_draws: int | None = None,
     n_jobs: int = 1,
 ) -> EstimatorStudy:
-    """Apply each method to every (comparison, scenario, draw) sample.
-
-    With n_jobs > 1 the samples are processed in parallel, one thread per worker. Results do not depend on
-    n_jobs: every sample carries its own seed and the rows are sorted into a fixed order afterwards.
-    """
+    """Run the methods on every (comparison, scenario, draw). Results don't depend on n_jobs."""
     spec = spec or load_benchmark_config(1)
     scenarios = scenarios or list(spec["scenarios"])
     n_draws = n_draws or spec["randomness"]["n_draws"]
@@ -277,10 +268,6 @@ def run_estimator_study(
     diagnostics = diagnostics.sort_values(keys, kind="stable").reset_index(drop=True)
     return EstimatorStudy(estimates, diagnostics, pairs)
 
-
-# --------------------------------------------------------------------------------------------------
-# Milestone 6: outcome regression, AIPW and Double Machine Learning
-# --------------------------------------------------------------------------------------------------
 
 CROSS_FIT_FOLDS = 5  # frozen v1: 5-fold cross-fitting for AIPW and DML
 

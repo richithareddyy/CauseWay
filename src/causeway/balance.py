@@ -12,11 +12,9 @@ def standardized_mean_difference(
     treated_weights: np.ndarray | None = None,
     control_weights: np.ndarray | None = None,
 ) -> float:
-    """Difference in (weighted) means divided by the pooled unweighted standard deviation.
+    """Difference in (weighted) means over the pooled unweighted SD.
 
-    The denominator uses the unweighted sample variances (ddof=1) of the two groups, so the scale is
-    fixed before any adjustment and weighted and unweighted SMDs are comparable. Returns 0 when both
-    groups are constant and equal, and inf when they are constant but different.
+    Keeping the unweighted scale makes weighted and unweighted SMDs comparable.
     """
     t = np.asarray(treated, dtype=float)
     c = np.asarray(control, dtype=float)

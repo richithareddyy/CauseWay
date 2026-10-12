@@ -1,8 +1,4 @@
-"""Raw -> interim -> processed transformations, each one recorded in a transformation log.
-
-No row is ever removed. Every change to a value or label is logged with the number of rows it
-affected and the reason for it.
-"""
+"""Raw -> interim -> processed transformations, each one recorded in a log."""
 
 from __future__ import annotations
 

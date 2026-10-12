@@ -1,9 +1,4 @@
-"""Numeric encoding of the pre-treatment covariates.
-
-One encoding is shared by balance diagnostics, regression adjustment and the observational benchmark:
-ln(history), recency (linear), mens, womens, newbie, zip_code dummies (reference Suburban) and channel
-dummies (reference Phone). Outcomes and the treatment are never part of it.
-"""
+"""Numeric encoding of the pre-treatment covariates, shared by every model."""
 
 from __future__ import annotations
 

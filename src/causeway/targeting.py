@@ -1,11 +1,4 @@
-"""Targeting: do estimated treatment effects support a better e-mail policy than treating everyone?
-
-Every customer's predicted effects come from CATE models trained without that customer (5-fold
-cross-fitting over the whole trial). A policy assigns each customer an arm; its value is estimated on the
-randomized data by inverse probability weighting with the known arm shares, using only customers whose
-randomized arm agrees with the policy. These are *estimated* policy values in incremental revenue; no
-policy here was ever run, and costs and margins are not in the data.
-"""
+"""Targeting policies from cross-fitted CATE predictions, scored by IPW on held-out customers."""
 
 from __future__ import annotations
 
@@ -94,10 +87,9 @@ def evaluate_policies(
     seed: int,
     comparisons: list[tuple[str, str]],
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Policy values relative to treating no one, and pre-specified differences, with bootstrap intervals.
+    """Policy values relative to treating nobody, with bootstrap CIs.
 
-    The bootstrap resamples customers within randomized arms and holds the cross-fitted predictions fixed,
-    so the intervals reflect sampling of customers, not re-training of the CATE models.
+    Customers are resampled within arms and the predictions are held fixed.
     """
     rng = np.random.default_rng(seed)
     assigned = policies(effects, budget, rng)

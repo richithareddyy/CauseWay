@@ -1,15 +1,4 @@
-"""Outcome regression (g-computation) and cross-fitted augmented IPW.
-
-The AIPW score combines an outcome model mu_t(x) = E[Y | T=t, X=x] with a propensity model e(x):
-
-    psi_i = mu_1(x_i) - mu_0(x_i) + T_i (Y_i - mu_1(x_i)) / e(x_i) - (1 - T_i)(Y_i - mu_0(x_i)) / (1 - e(x_i))
-
-Its mean is consistent for the ATE if either model is correct (double robustness), and its first-order
-sensitivity to errors in either model vanishes (Neyman orthogonality). Nuisance models are fitted on K-1
-folds and evaluated on the held-out fold (cross-fitting), so no unit's own outcome informs its
-prediction. The same function serves the linear AIPW estimator and, with flexible learners, the
-hand-written check on Double Machine Learning.
-"""
+"""Outcome regression (g-computation) and cross-fitted AIPW."""
 
 from __future__ import annotations
 
@@ -42,11 +31,6 @@ def linear_outcome_model() -> RegressorMixin:
     return LinearRegression()
 
 
-# --------------------------------------------------------------------------------------------------
-# Outcome regression (g-computation)
-# --------------------------------------------------------------------------------------------------
-
-
 @dataclass
 class Estimate:
     estimate: float
@@ -70,11 +54,6 @@ def outcome_regression(
     centred, fully interacted regression, whose HC2 standard error is reported (frozen v1 rule)."""
     lin = lin_adjusted(y, treated, covariates, ci_level)
     return Estimate(lin.estimate, lin.se, lin.ci_low, lin.ci_high)
-
-
-# --------------------------------------------------------------------------------------------------
-# Cross-fitted AIPW
-# --------------------------------------------------------------------------------------------------
 
 
 @dataclass
@@ -121,10 +100,9 @@ def cross_fitted_scores(
 
 
 class ArmwiseRegression(BaseEstimator, RegressorMixin):
-    """Fit a separate regression in each arm, with the treatment indicator as the LAST feature column.
+    """One regression per arm, with treatment as the last column.
 
-    Lets EconML's DR learner (which regresses Y on [X, T]) use exactly the arm-specific outcome models
-    of the hand-written AIPW, so the two implementations can be compared like for like.
+    This lets EconML's DR learner use the same outcome models as our hand-written AIPW.
     """
 
     def __init__(self, base=None):

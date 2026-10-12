@@ -273,11 +273,6 @@ def run_experiment_report(paths: DataPaths | None = None) -> ExperimentOutputs:
     return ExperimentOutputs(results, tables, boundary, figures, report_path)
 
 
-# --------------------------------------------------------------------------------------------------
-# Part II: constructed observational benchmark
-# --------------------------------------------------------------------------------------------------
-
-
 @dataclass
 class BenchmarkOutputs:
     tables: dict[str, pd.DataFrame]
@@ -524,10 +519,6 @@ def run_benchmark_construction_report(paths: DataPaths | None = None) -> Benchma
     return BenchmarkOutputs(tables, figures, report_path)
 
 
-# --------------------------------------------------------------------------------------------------
-# Part II, Milestone 5: propensity scores, weighting and matching
-# --------------------------------------------------------------------------------------------------
-
 PROPENSITY_ESTIMATORS = ["naive_difference", "oracle_ipw", "ipw_ate", "ipw_att", "matching_nn"]
 
 
@@ -734,10 +725,6 @@ def run_propensity_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
     return BenchmarkOutputs(tables, figures, report_path)
 
 
-# --------------------------------------------------------------------------------------------------
-# Part II, Milestone 6: outcome regression, AIPW and Double Machine Learning
-# --------------------------------------------------------------------------------------------------
-
 ESTIMATION_ESTIMATORS = ["naive_difference", "oracle_ipw", "outcome_regression", "aipw", "dml_irm"]
 CROSS_CHECK_DRAWS = 10  # fixed from runtime considerations before any result was seen
 
@@ -912,10 +899,6 @@ def run_estimation_report(paths: DataPaths | None = None, n_jobs: int = 8) -> Be
     return BenchmarkOutputs(tables, figures, report_path)
 
 
-# --------------------------------------------------------------------------------------------------
-# Part II, Milestone 7: estimator comparison
-# --------------------------------------------------------------------------------------------------
-
 COMPARISON_ESTIMATORS = [
     "naive_difference",
     "oracle_ipw",
@@ -1061,11 +1044,6 @@ def run_comparison_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
     report_path.write_text(_comparison_markdown(inputs, display, performance))
     write_provenance(results_dir, paths, inputs["spec"])
     return BenchmarkOutputs(tables, figures, report_path)
-
-
-# --------------------------------------------------------------------------------------------------
-# Milestone 8: heterogeneous treatment effects and targeting (randomized experiment)
-# --------------------------------------------------------------------------------------------------
 
 
 def _heterogeneity_markdown(

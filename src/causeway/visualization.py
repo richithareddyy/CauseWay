@@ -1,8 +1,4 @@
-"""Static, publication-quality figures. Each function answers one stated analytical question.
-
-Colour encodes identity only and follows the entity: each arm keeps one colour in every figure
-(palette validated for colour-vision deficiency; values are always labelled as well).
-"""
+"""Report figures."""
 
 from __future__ import annotations
 
@@ -403,7 +399,7 @@ def design_propensity_overlap(panels: list[dict], path: Path) -> Path:
     _footnote(
         fig,
         "e*(x) is the propensity fixed by the benchmark design, known only because the selection was "
-        "constructed. Estimated propensities are examined in Milestone 5.",
+        "constructed. Estimated propensities are in the propensity report.",
     )
     fig.tight_layout()
     return save(fig, path)

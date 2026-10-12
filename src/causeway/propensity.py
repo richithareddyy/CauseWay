@@ -1,9 +1,4 @@
-"""Propensity score estimation and its diagnostics.
-
-A propensity model is judged by what it does for causal estimation (overlap, balance, weight stability),
-not by how well it predicts treatment. Predictive metrics are reported separately, and in the
-constructed benchmark the estimate can also be compared with the true design propensity e*(x).
-"""
+"""Propensity score model and its diagnostics."""
 
 from __future__ import annotations
 

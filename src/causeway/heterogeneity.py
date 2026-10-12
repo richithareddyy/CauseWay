@@ -1,15 +1,4 @@
-"""Heterogeneous treatment effects in the randomized experiment (configs/heterogeneity.toml).
-
-Order of analysis, fixed in advance:
-1. A formal test of whether effects vary with the covariates at all: the best linear predictor (BLP) of
-   the CATE, sorted group average effects (GATES) and classification analysis (CLAN) of Chernozhukov,
-   Demirer, Duflo and Fernandez-Val (2018). A causal forest trained on one half of the data supplies a
-   CATE proxy S(x); its usefulness is tested on the other half, where randomization makes the regression
-   coefficients interpretable whatever the quality of the proxy. Repeated splits remove the dependence
-   on one split; the split-adjusted inference takes medians.
-2. Pre-specified segments, analysed as small randomized experiments within each level (exploratory).
-3. A causal forest fitted to the whole pair, for a description of the predicted effects.
-"""
+"""Heterogeneous effects in the randomized experiment: BLP/GATES/CLAN, segments and a causal forest."""
 
 from __future__ import annotations
 
@@ -55,11 +44,6 @@ def causal_forest(plan: dict, seed: int) -> CausalForestDML:
     )
 
 
-# --------------------------------------------------------------------------------------------------
-# BLP, GATES and CLAN for one split
-# --------------------------------------------------------------------------------------------------
-
-
 def _ols(y: np.ndarray, design: np.ndarray):
     return sm.OLS(y, design).fit(cov_type="HC1")
 
@@ -74,11 +58,7 @@ def blp_gates_clan(
     n_groups: int,
     ci_level: float,
 ) -> dict:
-    """Main-sample regressions given proxies S(x) (CATE) and B(x) (baseline) fitted on the auxiliary half.
-
-    With a known, constant propensity p the weights 1/(p(1-p)) are constant, so plain OLS applies.
-    b1 estimates the ATE; b2 = 1 if S is the true CATE and 0 if S carries no information about it.
-    """
+    """BLP, GATES and CLAN on the main half, given proxies fitted on the auxiliary half."""
     t = treated.astype(float)
     p = t.mean()
     s_centred = proxy_cate - proxy_cate.mean()
@@ -165,12 +145,9 @@ def run_split(
 
 
 def aggregate_splits(splits: list[dict]) -> pd.DataFrame:
-    """Split-adjusted inference: medians of estimates and bounds; p-value = min(1, 2 x median p).
+    """Combine splits by medians, with p = 2 x median p (capped at 1).
 
-    `share_positive` records how often the per-split estimate is positive. When the sign flips across
-    splits (common for CLAN, whose groups depend on the split), each split can reject in its own direction,
-    so the median p-value is small while the median estimate and interval sit near zero. Such a p-value
-    does not describe a stable quantity; the interval and the sign share should be read instead.
+    share_positive flags estimates whose sign changes from split to split.
     """
     rows = []
     for parameter in splits[0]:
@@ -208,11 +185,6 @@ def heterogeneity_verdict(aggregated: pd.DataFrame, alpha: float) -> dict:
         "gates_evidence": gates_evidence,
         "heterogeneity_detected": blp_evidence and gates_evidence,
     }
-
-
-# --------------------------------------------------------------------------------------------------
-# Pre-specified segments
-# --------------------------------------------------------------------------------------------------
 
 
 def segment_effects(y: np.ndarray, treated: np.ndarray, levels: pd.Series, variable: str) -> pd.DataFrame:

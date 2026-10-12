@@ -1,13 +1,4 @@
-"""Part II: the constructed observational benchmark (configs/benchmark/v1.toml).
-
-Randomization is removed by RCT rejection sampling (Keith et al., 2023): within each randomized pair,
-unit i with trial arm t_i is kept with probability P*(T=t_i | x_i) / (P_hat(T=t_i) * M). In the retained
-sample P(T=1 | X) equals the design propensity e*(X) and the covariate distribution is unchanged in
-expectation, so the confounding is real but entirely explained by observed covariates.
-
-Nothing here is Hillstrom's own data-generating process. Every retained sample is reproducible from the
-frozen base seed, the comparison index and the draw index.
-"""
+"""Constructed observational benchmark: RCT rejection sampling within each pair (Keith et al., 2023)."""
 
 from __future__ import annotations
 
@@ -40,11 +31,6 @@ class OverlapGuardError(RuntimeError):
     """The pre-specified covariate-only overlap guard failed; a recorded amendment is required."""
 
 
-# --------------------------------------------------------------------------------------------------
-# Seeds
-# --------------------------------------------------------------------------------------------------
-
-
 def seed_sequence(
     base_seed: int, comparison_index: int, draw_index: int, stream: int
 ) -> np.random.SeedSequence:
@@ -60,11 +46,6 @@ def selection_uniforms(base_seed: int, comparison_index: int, draw_index: int, n
 def estimator_seed(base_seed: int, comparison_index: int, draw_index: int) -> int:
     """Integer seed for any randomness inside estimators (folds, learners) for one draw."""
     return int(seed_sequence(base_seed, comparison_index, draw_index, ESTIMATOR_STREAM).generate_state(1)[0])
-
-
-# --------------------------------------------------------------------------------------------------
-# Design propensity and selection
-# --------------------------------------------------------------------------------------------------
 
 
 def selection_terms(frame: pd.DataFrame) -> pd.DataFrame:
@@ -189,11 +170,6 @@ def overlap_guard(pair: Pair, spec: dict) -> list[dict]:
     return rows
 
 
-# --------------------------------------------------------------------------------------------------
-# Experimental benchmarks (full randomized pair)
-# --------------------------------------------------------------------------------------------------
-
-
 def _hajek_difference(y: np.ndarray, treated: np.ndarray, weights: np.ndarray) -> tuple[float, float]:
     """Weighted difference in Hajek means with a linearization standard error."""
     out, var = [], 0.0
@@ -233,11 +209,6 @@ def experimental_benchmarks(pair: Pair, spec: dict) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-# --------------------------------------------------------------------------------------------------
-# Construction checks across the Monte Carlo draws
-# --------------------------------------------------------------------------------------------------
-
-
 def oracle_ipw(y: np.ndarray, treated: np.ndarray, e_star: np.ndarray, ci_level: float) -> dict:
     """Hajek IPW with the TRUE design propensity: a validity check on the construction, not an estimator
     an analyst could use. Influence-function standard error; Kish effective sample size per arm."""
@@ -273,10 +244,9 @@ class ConstructionStudy:
 def run_construction_study(
     processed: pd.DataFrame, spec: dict | None = None, n_draws: int | None = None
 ) -> ConstructionStudy:
-    """Build every scenario, check the construction over all draws, and compute naive and oracle estimates.
+    """Build the scenarios and check the construction over all draws.
 
-    Scenario C retains exactly the units of Scenario A (shared uniforms, same k) and differs only in
-    what the analyst may adjust for, so the naive and oracle estimates are computed once for A and B.
+    Scenario C reuses A's samples, so the naive and oracle estimates are only computed for A and B.
     """
     spec = spec or load_benchmark_config(1)
     base_seed = spec["randomness"]["base_seed"]
@@ -357,11 +327,9 @@ def run_construction_study(
 
 
 def monte_carlo_summary(estimates: pd.DataFrame, benchmarks: pd.DataFrame) -> pd.DataFrame:
-    """Bias, absolute bias, RMSE, coverage, variance and failure rate against estimand-matched benchmarks.
+    """Bias, RMSE, coverage and the rest against the matching benchmark.
 
-    Coverage is measured against the full-pair (finite-population) benchmark. Each retained sample is a
-    subset of the same trial, so estimates vary less around that benchmark than their nominal standard
-    errors imply; `se_to_sd_ratio` reports this directly, and the oracle row is the calibration reference.
+    Coverage is measured against a finite-population target, so read it next to the oracle's.
     """
     targets = benchmarks.rename(columns={"estimand": "benchmark", "value": "benchmark_value"})[
         ["comparison", "scenario", "outcome", "benchmark", "benchmark_value"]
@@ -403,13 +371,7 @@ def monte_carlo_summary(estimates: pd.DataFrame, benchmarks: pd.DataFrame) -> pd
 
 
 def naive_bias_decomposition(pair: Pair, spec: dict) -> pd.DataFrame:
-    """Exact finite-population decomposition of what the naive comparison targets in a retained sample.
-
-    Retained treated units are weighted by e*(x) and retained controls by 1 - e*(x), so the naive
-    difference targets E_e*[Y | T=1] - E_(1-e*)[Y | T=0] over the full randomized pair. Relative to the
-    ATE this equals a baseline (selection) bias, the difference in untreated outcomes between the kinds
-    of customers who end up treated and untreated, plus an effect-heterogeneity term, ATT - ATE.
-    """
+    """Split the naive bias into baseline bias plus ATT - ATE (an exact identity on the full pair)."""
     outcomes = [spec["outcomes"]["primary"], *spec["outcomes"]["secondary"]]
     t, c = pair.treated, ~pair.treated
     rows = []

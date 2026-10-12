@@ -1,10 +1,7 @@
-"""Milestone 1 audit of the raw Hillstrom e-mail experiment file.
-
-Standard library only, so it can run before the project environment exists.
-Every number quoted in docs/design.md (Sections 1-2) is printed by this script.
+"""Audit the raw Hillstrom file using only the standard library.
 
 Usage:
-    python scripts/audit_raw_data.py PATH_TO_ORIGINAL_CSV [PATH_TO_MIRROR_CSV_GZ]
+    python scripts/audit_raw_data.py ORIGINAL_CSV [MIRROR_CSV_GZ]
 """
 
 from __future__ import annotations

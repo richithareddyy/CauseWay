@@ -1,11 +1,4 @@
-"""Milestone 7: compare every observational estimator against its estimand-matched experimental benchmark.
-
-Two views are kept separate:
-- one realized observational dataset (the pre-registered display draw), which is what an analyst would
-  actually face: an estimate, an interval, and an error that only the benchmark reveals;
-- the full Monte Carlo distribution over 200 draws, which characterizes each estimator's bias, variance
-  and interval calibration.
-"""
+"""Compare every Part II estimator with the experimental benchmark for its own estimand."""
 
 from __future__ import annotations
 
@@ -72,7 +65,9 @@ def check_provenance(records: dict[str, dict]) -> dict:
 
 
 def load_benchmark_estimates(paths: DataPaths, n_draws: int) -> tuple[pd.DataFrame, dict]:
-    """Combine Milestone 5 and 6 estimates after checking provenance, shared references and completeness."""
+    """Combine the propensity and estimation results after checking provenance, shared references and
+    completeness.
+    """
     sources = ["propensity", "estimation"]
     records = {name: read_provenance(_results_dir(paths, name)) for name in sources}
     provenance = check_provenance(records)
@@ -128,11 +123,7 @@ def performance_table(estimates: pd.DataFrame, benchmarks: pd.DataFrame) -> pd.D
 def display_table(
     estimates: pd.DataFrame, benchmarks: pd.DataFrame, experiment_effects: pd.DataFrame, draw: int
 ) -> pd.DataFrame:
-    """One realized observational dataset: each estimate beside its estimand-matched benchmark.
-
-    The first rows per cell are the randomized-experiment estimates (Part I) for the full pair, with their
-    own 95% intervals, followed by the experimental ATT benchmark for that scenario.
-    """
+    """One constructed dataset: each estimate beside its benchmark, with the experiment as reference."""
     rows = []
     shown = estimates[estimates["draw"] == draw]
     for (comparison, scenario, outcome), group in shown.groupby(

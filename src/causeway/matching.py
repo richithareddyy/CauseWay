@@ -1,10 +1,4 @@
-"""Greedy 1:1 nearest-neighbour propensity score matching without replacement.
-
-Treated units are processed in descending propensity score (the hardest to match first), ties broken by
-row_id. Each takes the nearest still-available control on the logit propensity; equal distances go to
-the control with the smaller row_id. A treated unit whose nearest available control lies beyond the
-caliper is left unmatched, which changes the estimand to the ATT among matched treated units.
-"""
+"""Greedy 1:1 nearest-neighbour matching on the logit propensity score, without replacement."""
 
 from __future__ import annotations
 
@@ -43,10 +37,9 @@ def greedy_match(
     control_row_ids: np.ndarray,
     caliper: float | None,
 ) -> MatchResult:
-    """Nearest available control for each treated unit in `treated_order`.
+    """Nearest available control for each treated unit, in the given order.
 
-    Controls are kept sorted by logit; two union-find structures give the nearest available control at
-    or to the left and at or to the right of any position, so each lookup is near-constant time.
+    Union-find over the sorted controls keeps each lookup close to constant time.
     """
     order = np.lexsort((control_row_ids, control_logit))
     values = control_logit[order]

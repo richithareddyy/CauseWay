@@ -1,8 +1,4 @@
-"""Acquisition and loading of the immutable raw dataset.
-
-The raw file is downloaded once, accepted only if its SHA-256 matches a configured source, and then
-made read-only. It is never edited: every later stage reads it and writes elsewhere.
-"""
+"""Download, verify and read the raw data file."""
 
 from __future__ import annotations
 
@@ -67,10 +63,9 @@ def raw_path(config: DataConfig, paths: DataPaths) -> Path:
 
 
 def acquire_raw(config: DataConfig, paths: DataPaths) -> tuple[Path, dict]:
-    """Return the verified raw file and its provenance, downloading only if it is absent.
+    """Return the verified raw file, downloading it only if it is missing.
 
-    An existing raw file is never overwritten. If its checksum no longer matches the source it came
-    from, a ChecksumError is raised so that the modification is investigated rather than hidden.
+    An existing file is never overwritten; if its checksum no longer matches, this raises.
     """
     target = raw_path(config, paths)
     provenance_file = target.with_name(target.name + PROVENANCE_SUFFIX)
@@ -120,9 +115,5 @@ def acquire_raw(config: DataConfig, paths: DataPaths) -> tuple[Path, dict]:
 
 
 def read_raw(path: Path) -> pd.DataFrame:
-    """Read the raw CSV exactly as text.
-
-    Every field stays a string and no value is converted to NaN, so validation sees the file as it is
-    (an empty field stays '' rather than silently becoming missing).
-    """
+    """Read the raw CSV as text without turning anything into NaN."""
     return pd.read_csv(path, dtype=str, keep_default_na=False, na_filter=False)

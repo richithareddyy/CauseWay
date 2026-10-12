@@ -1,8 +1,4 @@
-"""Explicit validation checks for the raw and processed datasets.
-
-Checks report; they never modify or drop data. A check with status "fail" stops the pipeline; "warn"
-and "info" are recorded in the validation report for a human to read.
-"""
+"""Validation checks for the raw and processed data. They report problems and never change the data."""
 
 from __future__ import annotations
 

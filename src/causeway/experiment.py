@@ -1,10 +1,4 @@
-"""Part I: design-based analysis of the randomized e-mail experiment.
-
-The estimand throughout is the intention-to-treat effect of *assignment* to an e-mail campaign.
-Randomization identifies it without any model: the difference in means is unbiased, the Neyman
-variance is (conservatively) valid, and the Fisher randomization test is exact for the sharp null.
-Regression adjustment (Lin, 2013) is used only to gain precision.
-"""
+"""Design-based analysis of the randomized experiment (Part I)."""
 
 from __future__ import annotations
 
@@ -30,11 +24,6 @@ from causeway.features import covariate_matrix
 ESTIMAND = "ITT effect of assignment"
 
 
-# --------------------------------------------------------------------------------------------------
-# Plan and randomness
-# --------------------------------------------------------------------------------------------------
-
-
 def load_experiment_plan(path: Path = CONFIG_DIR / "experiment.toml") -> dict:
     return tomllib.loads(path.read_text())
 
@@ -46,11 +35,6 @@ def stream_rng(base_seed: int, stream: int) -> np.random.Generator:
 
 def stream_int_seed(base_seed: int, stream: int) -> int:
     return int(np.random.SeedSequence(entropy=base_seed, spawn_key=(stream,)).generate_state(1)[0])
-
-
-# --------------------------------------------------------------------------------------------------
-# Estimators
-# --------------------------------------------------------------------------------------------------
 
 
 @dataclass
@@ -67,11 +51,7 @@ def _z(ci_level: float) -> float:
 
 
 def neyman_difference(y_treated: np.ndarray, y_control: np.ndarray, ci_level: float = 0.95) -> Estimate:
-    """Difference in means with the Neyman variance s1^2/n1 + s0^2/n0 and a normal-theory interval.
-
-    The Neyman variance equals the HC2 robust variance of the treatment coefficient in a regression of
-    the outcome on an intercept and a treatment indicator.
-    """
+    """Difference in means with the Neyman variance (the same as HC2 here)."""
     y_t = np.asarray(y_treated, dtype=float)
     y_c = np.asarray(y_control, dtype=float)
     estimate = y_t.mean() - y_c.mean()
@@ -84,11 +64,7 @@ def neyman_difference(y_treated: np.ndarray, y_control: np.ndarray, ci_level: fl
 def lin_adjusted(
     y: np.ndarray, treated: np.ndarray, covariates: pd.DataFrame, ci_level: float = 0.95
 ) -> Estimate:
-    """Lin (2013) estimator: OLS of y on treatment, centred covariates and their interactions, HC2 SEs.
-
-    Centring on the analysis-sample mean makes the treatment coefficient the average effect for that
-    sample. Randomization alone justifies it; the linear model need not be correct.
-    """
+    """Lin (2013) regression adjustment: treatment interacted with centred covariates, HC2 SEs."""
     t = np.asarray(treated, dtype=float)
     centred = covariates.to_numpy(dtype=float) - covariates.to_numpy(dtype=float).mean(axis=0)
     design = np.column_stack([np.ones_like(t), t, centred, t[:, None] * centred])
@@ -104,11 +80,9 @@ def randomization_test(
     rng: np.random.Generator,
     batch_size: int = 100,
 ) -> np.ndarray:
-    """Monte Carlo Fisher randomization test of the sharp null of no effect for any customer.
+    """Two-sided Fisher randomization test of the sharp null.
 
-    Treatment labels are re-drawn by complete randomization with the observed arm sizes; the statistic
-    is the absolute difference in means. Accepts one outcome (1-D) or several (2-D, one per column) and
-    returns one p-value per outcome, computed as (1 + #{|T*| >= |T_obs|}) / (1 + R).
+    p = (1 + #exceed) / (1 + R); several outcomes can be tested at once.
     """
     y_t = np.asarray(y_treated, dtype=float).reshape(len(y_treated), -1)
     y_c = np.asarray(y_control, dtype=float).reshape(len(y_control), -1)
@@ -132,11 +106,7 @@ def randomization_test(
 def bootstrap_means(
     samples: list[np.ndarray], n_resamples: int, rng: np.random.Generator, batch_size: int = 100
 ) -> list[np.ndarray]:
-    """Resample customers with replacement within each arm; return the (B, k) resampled means per arm.
-
-    Arm sizes are held fixed, matching a completely randomized design. Samples are processed in the
-    order given, so results are reproducible for a fixed generator state.
-    """
+    """Resample customers within each arm and return a (B, k) array of means per arm."""
     out = []
     for sample in samples:
         values = np.asarray(sample, dtype=float).reshape(len(sample), -1)
@@ -150,11 +120,9 @@ def bootstrap_means(
 
 
 def dim_acceleration(y_treated: np.ndarray, y_control: np.ndarray) -> float:
-    """BCa acceleration for a difference in means, from the closed-form two-sample jackknife.
+    """BCa acceleration for a difference in means.
 
-    Leaving out treated unit i changes the estimate by -(y_i - mean_t)/(n_t - 1), so the jackknife
-    influence values are the centred observations (sign-flipped for the control arm). This follows the
-    multi-sample formula of Efron & Tibshirani (1993, Eq. 14.15) as implemented in scipy.stats.bootstrap.
+    The two-sample jackknife has a closed form here; it matches scipy.stats.bootstrap.
     """
     y_t = np.asarray(y_treated, dtype=float)
     y_c = np.asarray(y_control, dtype=float)
@@ -188,10 +156,9 @@ def bca_interval(
 
 
 def binary_contrast(y_treated: np.ndarray, y_control: np.ndarray, ci_level: float = 0.95) -> dict[str, float]:
-    """Risk difference (Newcombe hybrid-score interval) and risk ratio (log-scale interval).
+    """Risk difference (Newcombe CI) and risk ratio (log CI).
 
-    The risk ratio and its log-scale interval are undefined when either arm has no events; they are then
-    reported as NaN rather than as an infinite or zero ratio.
+    The ratio is NaN when an arm has no events.
     """
     y_t = np.asarray(y_treated, dtype=int)
     y_c = np.asarray(y_control, dtype=int)
@@ -227,17 +194,8 @@ def holm(p_values: list[float]) -> list[float]:
     return multipletests(p_values, method="holm")[1].tolist()
 
 
-# --------------------------------------------------------------------------------------------------
-# Randomization diagnostics
-# --------------------------------------------------------------------------------------------------
-
-
 def assignment_diagnostics(covariates: pd.DataFrame, treated: np.ndarray, folds: int, seed: int) -> dict:
-    """Can the covariates predict assignment? Under randomization they should not.
-
-    Reports a likelihood-ratio test that every covariate coefficient in a logistic model of assignment
-    is zero, and the out-of-fold AUC of that model (0.5 = no predictive information).
-    """
+    """Can the covariates predict assignment? Under randomization they shouldn't."""
     t = np.asarray(treated, dtype=int)
     logit = sm.Logit(t, sm.add_constant(covariates.to_numpy(dtype=float))).fit(disp=0)
     model = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
@@ -266,11 +224,6 @@ def assignment_by_strata(frame: pd.DataFrame, strata: list[str], arm_column: str
             row.update({"chi2": float(chi2), "dof": int(dof), "p_value": float(p_value)})
             rows.append(row)
     return pd.DataFrame(rows)
-
-
-# --------------------------------------------------------------------------------------------------
-# Orchestration
-# --------------------------------------------------------------------------------------------------
 
 
 @dataclass

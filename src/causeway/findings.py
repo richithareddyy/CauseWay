@@ -429,12 +429,19 @@ def _heterogeneity(r: dict) -> list[str]:
         verdict = (
             "No heterogeneity was detected: the predicted differences did not replicate on held-out data."
         )
+    # The bootstrap resamples customers with the fitted predictions held fixed, so it leaves out
+    # model-fitting variability and the interval is somewhat too narrow.
     if best["ci_low"] <= 0:
         policy = (
-            "The experiment therefore supports the simple policy over any targeting these covariates allow."
+            "The experiment therefore supports the simple policy over any targeting these covariates allow. "
+            "The interval holds the fitted predictions fixed, so it leaves out model-fitting variability; "
+            "a wider interval would only strengthen this conclusion."
         )
     else:
-        policy = "Model-based targeting beats sending everyone the Mens e-mail."
+        policy = (
+            "Model-based targeting beats sending everyone the Mens e-mail, although the interval holds the "
+            "fitted predictions fixed and so understates the uncertainty."
+        )
     return [
         "## 4. Does the effect differ between customers?",
         "",

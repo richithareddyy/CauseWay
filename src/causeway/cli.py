@@ -61,6 +61,14 @@ def _report(args: argparse.Namespace) -> int:
     return 0
 
 
+def _docs(_: argparse.Namespace) -> int:
+    from causeway.findings import publish_docs
+
+    for path in publish_docs():
+        print(f"wrote    {path}")
+    return 0
+
+
 def _env(_: argparse.Namespace) -> int:
     print(json.dumps(environment(), indent=2))
     return 0
@@ -79,6 +87,9 @@ def main(argv: list[str] | None = None) -> int:
         commands.choices[name].add_argument(
             "--render-only", action="store_true", help="redraw figures and the report from saved tables"
         )
+    commands.add_parser("docs", help="copy the findings report and key figures into docs/").set_defaults(
+        func=_docs
+    )
     commands.add_parser("env", help="print Python and dependency versions").set_defaults(func=_env)
     args = parser.parse_args(argv)
     return args.func(args)

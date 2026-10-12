@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json
+import re
+import shutil
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from causeway import visualization as viz
 from causeway.comparison import check_provenance
-from causeway.config import DataPaths
+from causeway.config import PROJECT_ROOT, DataPaths
 from causeway.provenance import read_provenance
 from causeway.reporting import ReportOutputs, _fmt_ci, _fmt_p, _save_tables
 
@@ -73,6 +76,18 @@ ASSUMPTIONS = {
         "Alternative specifications, doubly robust estimators and the comparison with the benchmark.",
     ),
 }
+
+# Figures copied into docs/ so the README and the published report can show them on GitHub.
+PUBLISHED_FIGURES = [
+    "experiment/itt_effects.png",
+    "benchmark/selection_imbalance.png",
+    "propensity/estimated_propensity_overlap.png",
+    "findings/estimator_recovery.png",
+    "comparison/forest_display_draw_spend.png",
+    "heterogeneity/gates_by_predicted_effect.png",
+    "heterogeneity/uplift_curves_spend.png",
+    "robustness/sensitivity_summary.png",
+]
 
 # (spec item from the project brief, figure path under reports/figures, figure function)
 FIGURE_GUIDE = [
@@ -653,3 +668,37 @@ def build_findings_report(paths: DataPaths | None = None) -> ReportOutputs:
     report_path = results_dir / "findings_report.md"
     report_path.write_text(findings_markdown(results, tables))
     return ReportOutputs(tables, figures, report_path)
+
+
+def relink(markdown: str) -> str:
+    """Point figure links at docs/figures; figures that are not published become plain paths."""
+
+    def replace(match: re.Match) -> str:
+        bang, text, path = match.groups()
+        if path in PUBLISHED_FIGURES:
+            return f"{bang}[{text}](figures/{Path(path).name})"
+        return f"`reports/figures/{path}`"
+
+    return re.sub(r"(!?)\[([^\]]*)\]\(\.\./\.\./figures/([^)]+)\)", replace, markdown)
+
+
+def publish_docs(paths: DataPaths | None = None, docs: Path = PROJECT_ROOT / "docs") -> list[Path]:
+    """Copy the findings report and the published figures into docs/ for the README to link to."""
+    paths = paths or DataPaths()
+    report = paths.results("findings") / "findings_report.md"
+    if not report.exists():
+        raise FileNotFoundError(f"{report} not found; run `make analysis` first")
+    (docs / "figures").mkdir(parents=True, exist_ok=True)
+    written = []
+    for path in PUBLISHED_FIGURES:
+        target = docs / "figures" / Path(path).name
+        shutil.copyfile(paths.figures(path), target)
+        written.append(target)
+    note = (
+        "> Copied from `reports/results/findings/findings_report.md` by `make docs`. Figures marked as paths "
+        "and every result table are produced locally by `make analysis`.\n\n"
+    )
+    title, _, body = report.read_text().partition("\n")
+    target = docs / "findings.md"
+    target.write_text(f"{title}\n\n{note}{relink(body.lstrip())}")
+    return [target, *written]

@@ -1,6 +1,6 @@
-# Causeway — Milestone 1: Dataset Verification and Causal Design
+# Causeway: design record
 
-**Status:** Milestone 1 approved on 2026-10-09. The decisions from that review are in Section 5, and the observational benchmark is frozen as v1 (Section 6). No estimators have been implemented. Every number in Section 1 is printed by `scripts/audit_raw_data.py`, run on the original source file.
+**Status:** Sections 1–6 are the dataset verification and causal design approved at Milestone 1 (2026-10-09), written before any estimator was implemented. The decisions from that review are in Section 5, and the observational benchmark is frozen as v1 (Section 6). Section 7 records what each later milestone found and decided, through the final audit. Results are in [the findings report](findings.md). Every number in Section 1 is printed by `scripts/audit_raw_data.py`, run on the original source file.
 
 **Disclosure on pre-specification.** The integrity audit computed outcome rates by arm (Section 1.11) to confirm the file is internally coherent, and the power calculations in Section 2.13 use outcome variances. This design is therefore *not* blind to the arm-level means. The choices below are made so that they do not exploit that knowledge: both e-mail arms are analysed as co-primary contrasts, the benchmark selection mechanism uses covariates only, and every robustness specification is listed here before any of them is run.
 
@@ -441,6 +441,7 @@ These are recorded for the later milestones. None of them changes the frozen ben
    - **Seeds.** No generator is unseeded. Every random stream (`numpy.random.default_rng`, fold splits, gradient boosting, the causal forest) derives from a configured seed, and the Monte Carlo results do not depend on the number of parallel workers.
    - **Disclosure added.** The targeting intervals resample customers with the fitted CATE predictions held fixed, so they omit model-fitting variability and are somewhat too narrow. This was stated in the heterogeneity report but not its consequence. The findings report now adds it: the main conclusion (targeting does not beat e-mailing everyone with the Mens e-mail) would only strengthen under wider intervals.
    - **CI** now also runs `pip check`, imports every module and checks the command-line entry point.
+15. **Final documentation (Milestone 12, 2026-10-12).** The README is the presentation layer: every number in it was read from the clean-run tables, and its figures are a curated set that `make docs` copies into `docs/figures/` together with the findings report (`docs/findings.md`). Everything else under `reports/` stays out of version control. A test checks that every link and image in the README and `docs/` resolves and that the published figures are exactly the set the code publishes. No notebooks were added: they would repeat the findings report without adding analysis.
 
 ---
 

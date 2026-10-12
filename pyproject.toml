@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "causeway"
-version = "0.2.0"
+version = "1.0.0"
 description = "Causal analysis of the randomized MineThatData e-mail experiment, with a constructed observational benchmark."
 readme = "README.md"
 authors = [{ name = "Richitha Rekula" }]

@@ -41,6 +41,7 @@ analysis:
 	$(RUN) propensity
 	$(RUN) estimation
 	$(RUN) compare
+	$(RUN) heterogeneity
 
 env:
 	$(RUN) env

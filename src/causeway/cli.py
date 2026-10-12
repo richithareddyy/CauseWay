@@ -86,6 +86,16 @@ def _compare(_: argparse.Namespace) -> int:
     return 0
 
 
+def _heterogeneity(args: argparse.Namespace) -> int:
+    from causeway.reporting import render_heterogeneity_report, run_heterogeneity_report
+
+    outputs = render_heterogeneity_report() if args.render_only else run_heterogeneity_report()
+    print(f"report   {outputs.report_path}")
+    for figure in outputs.figures:
+        print(f"figure   {figure}")
+    return 0
+
+
 def _env(_: argparse.Namespace) -> int:
     print(json.dumps(environment(), indent=2))
     return 0
@@ -112,6 +122,13 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("compare", help="Part II: compare every estimator with the benchmark").set_defaults(
         func=_compare
     )
+    heterogeneity = commands.add_parser("heterogeneity", help="Heterogeneous effects and targeting")
+    heterogeneity.add_argument(
+        "--render-only",
+        action="store_true",
+        help="redraw figures and the report from saved tables without recomputing",
+    )
+    heterogeneity.set_defaults(func=_heterogeneity)
     commands.add_parser("env", help="print Python and dependency versions").set_defaults(func=_env)
     args = parser.parse_args(argv)
     return args.func(args)

@@ -1061,3 +1061,362 @@ def run_comparison_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
     report_path.write_text(_comparison_markdown(inputs, display, performance))
     write_provenance(results_dir, paths, inputs["spec"])
     return BenchmarkOutputs(tables, figures, report_path)
+
+
+# --------------------------------------------------------------------------------------------------
+# Milestone 8: heterogeneous treatment effects and targeting (randomized experiment)
+# --------------------------------------------------------------------------------------------------
+
+
+def _heterogeneity_markdown(
+    plan: dict,
+    verdicts: pd.DataFrame,
+    gates: pd.DataFrame,
+    tests: pd.DataFrame,
+    levels: pd.DataFrame,
+    forest: pd.DataFrame,
+    values: pd.DataFrame,
+    differences: pd.DataFrame,
+) -> str:
+    lines = [
+        "# Heterogeneous treatment effects and targeting (randomized experiment)",
+        "",
+        "Plan: `configs/heterogeneity.toml` (committed before any result). Estimand: ITT effect of "
+        "assignment.",
+        "",
+        "## 1. Formal test: is there heterogeneity the covariates can predict?",
+        "",
+        f"Best linear predictor and GATES over {plan['blp']['n_splits']} random splits (split-adjusted). "
+        "Pre-specified rule: heterogeneity is reported only if b2 > 0 with p < 0.05 and the top-minus-bottom "
+        "GATES interval excludes 0.",
+        "",
+        "| Contrast | Outcome | ATE (b1) | b2 | b2 p-value | GATES Q5 − Q1 [95% CI] | Heterogeneity "
+        "detected |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for _, v in verdicts.iterrows():
+        b1 = gates[
+            (gates["contrast"] == v["contrast"])
+            & (gates["outcome"] == v["outcome"])
+            & (gates["parameter"] == "b1")
+        ].iloc[0]
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[v['contrast']]} | {v['outcome']} | {b1['estimate']:.4f} | {v['b2']:.3f} "
+            f"| {v['b2_p_value']:.3f} | {v['gates_spread']:.4f} [{v['gates_spread_ci_low']:.4f}, "
+            f"{v['gates_spread_ci_high']:.4f}] | {'yes' if v['heterogeneity_detected'] else 'no'} |"
+        )
+    for _, v in verdicts[verdicts["heterogeneity_detected"]].iterrows():
+        clan = gates[
+            (gates["contrast"] == v["contrast"])
+            & (gates["outcome"] == v["outcome"])
+            & gates["parameter"].str.startswith("clan_")
+        ]
+        lines += [
+            "",
+            f"**Who is most affected? CLAN for {viz.CONTRAST_LABELS[v['contrast']]}, {v['outcome']}** "
+            "(top versus bottom quintile of predicted effect; medians over splits).",
+            "",
+            "| Covariate | Most affected (mean) | Least affected (mean) | Difference [95% CI] | Splits with "
+            "positive difference | Direction |",
+            "|---|---|---|---|---|---|",
+        ]
+        for _, c in clan.iterrows():
+            stable = c["share_positive"] <= 0.2 or c["share_positive"] >= 0.8
+            lines.append(
+                f"| {c['parameter'].removeprefix('clan_')} | {c['top_mean']:.3f} | {c['bottom_mean']:.3f} "
+                f"| {c['estimate']:+.3f} [{c['ci_low']:+.3f}, {c['ci_high']:+.3f}] "
+                f"| {c['share_positive']:.0%} | {'stable' if stable else 'unstable across splits'} |"
+            )
+        lines += [
+            "",
+            "CLAN p-values are not reported: the groups change with each split, so a difference can be "
+            "significant in opposite directions in different splits. Rows whose sign agrees in fewer than "
+            "80% of splits are marked unstable and are not interpreted, even when the median interval "
+            "excludes zero.",
+        ]
+    lines += [
+        "",
+        "## 2. Pre-specified segments (exploratory)",
+        "",
+        "Equality tests (does the effect differ across the levels of a variable?), BH-adjusted across the "
+        "seven "
+        "variables within each contrast and outcome:",
+        "",
+        "| Contrast | Outcome | Variable | Chi-square (dof) | p | BH q |",
+        "|---|---|---|---|---|---|",
+    ]
+    for _, t in tests.iterrows():
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[t['contrast']]} | {t['outcome']} | {t['variable']} "
+            f"| {t['chi2']:.2f} ({t['dof']}) | {t['p_value']:.3f} | {t['q_value']:.3f} |"
+        )
+    counts = levels.groupby(["contrast", "outcome", "classification"]).size().unstack(fill_value=0)
+    lines += [
+        "",
+        "Level classifications (benefit / harm require BH q < 0.05):",
+        "",
+        "| Contrast | Outcome | " + " | ".join(counts.columns) + " |",
+        "|---|---|" + "---|" * len(counts.columns),
+    ]
+    for (contrast, outcome), row in counts.iterrows():
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[contrast]} | {outcome} | " + " | ".join(str(int(v)) for v in row) + " |"
+        )
+    lines += [
+        "",
+        "Every level's estimate, interval, q-value and minimum detectable effect is in `segment_levels.csv`.",
+        "",
+        "## 3. Causal forest (descriptive)",
+        "",
+        "| Contrast | Outcome | Mean predicted effect | 5th–95th percentile | Share with pointwise CI "
+        "excluding 0 "
+        "| Most important covariates |",
+        "|---|---|---|---|---|---|",
+    ]
+    for _, f in forest.iterrows():
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[f['contrast']]} | {f['outcome']} | {f['mean']:.4f} "
+            f"| [{f['p5']:.4f}, {f['p95']:.4f}] | {f['share_significant']:.1%} | {f['top_features']} |"
+        )
+    lines += [
+        "",
+        "## 4. Targeting: estimated policy values (held-out, spend; incremental $ per customer vs no e-mail)",
+        "",
+        "| Policy | Share e-mailed | Incremental value | 95% CI |",
+        "|---|---|---|---|",
+    ]
+    for _, v in values.iterrows():
+        lines.append(
+            f"| {v['policy']} | {v['share_emailed']:.1%} | {v['incremental_value']:.3f} "
+            f"| [{v['ci_low']:.3f}, {v['ci_high']:.3f}] |"
+        )
+    lines += ["", "| Comparison | Difference | 95% CI | Interval excludes 0 |", "|---|---|---|---|"]
+    for _, d in differences.iterrows():
+        lines.append(
+            f"| {d['policy']} − {d['versus']} | {d['difference']:+.3f} | [{d['ci_low']:+.3f}, "
+            f"{d['ci_high']:+.3f}] | {'yes' if d['interval_excludes_zero'] else 'no'} |"
+        )
+    lines += [
+        "",
+        "Estimated policy values use cross-fitted predictions and inverse probability weighting on the "
+        "randomized data; no policy here was run. Intervals resample customers with the predictions held "
+        "fixed. Values are incremental revenue: the data contain no e-mail costs or margins.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def run_heterogeneity_report(paths: DataPaths | None = None, n_jobs: int = 8) -> BenchmarkOutputs:
+    """Compute every heterogeneity and targeting table, save it, then render figures and the report."""
+    from joblib import Parallel, delayed
+
+    from causeway.heterogeneity import (
+        aggregate_splits,
+        describe_with_forest,
+        heterogeneity_verdict,
+        load_heterogeneity_plan,
+        plan_seed,
+        segment_analysis,
+        split_task,
+    )
+    from causeway.targeting import cross_fitted_effects, evaluate_policies, uplift_curve
+
+    paths = paths or DataPaths()
+    plan = load_heterogeneity_plan()
+    frame = load_processed(paths)
+    seed = plan["randomness"]["base_seed"]
+    names = plan["scope"]["covariates"]
+    arms = {"mens_vs_control": "Mens E-Mail", "womens_vs_control": "Womens E-Mail"}
+    jobs, keys, pairs = [], [], {}
+    for c_index, contrast in enumerate(plan["scope"]["contrasts"]):
+        pair = frame[frame["segment"].isin([arms[contrast], schema.CONTROL_ARM])].reset_index(drop=True)
+        x = covariate_matrix(pair)[names].to_numpy()
+        treated = (pair["segment"] == arms[contrast]).to_numpy()
+        pairs[contrast] = (pair, x, treated)
+        for o_index, outcome in enumerate(plan["scope"]["outcomes"]):
+            y = pair[outcome].to_numpy(dtype=float)
+            for split in range(plan["blp"]["n_splits"]):
+                jobs.append(
+                    delayed(split_task)(
+                        y,
+                        treated,
+                        x,
+                        names,
+                        plan,
+                        plan_seed(seed, plan["randomness"]["blp_stream"], c_index, o_index, split),
+                    )
+                )
+                keys.append((contrast, outcome))
+    results = Parallel(n_jobs=n_jobs)(jobs)
+    gates_rows, verdict_rows = [], []
+    for contrast in plan["scope"]["contrasts"]:
+        for outcome in plan["scope"]["outcomes"]:
+            splits = [r for r, k in zip(results, keys, strict=True) if k == (contrast, outcome)]
+            aggregated = aggregate_splits(splits).assign(contrast=contrast, outcome=outcome)
+            gates_rows.append(aggregated)
+            verdict_rows.append(
+                {
+                    "contrast": contrast,
+                    "outcome": outcome,
+                    **heterogeneity_verdict(aggregated, plan["blp"]["alpha"]),
+                }
+            )
+    gates, verdicts = pd.concat(gates_rows, ignore_index=True), pd.DataFrame(verdict_rows)
+
+    level_rows, test_rows, forest_rows, cate_rows = [], [], [], []
+    for c_index, contrast in enumerate(plan["scope"]["contrasts"]):
+        pair, x, treated = pairs[contrast]
+        for o_index, outcome in enumerate(plan["scope"]["outcomes"]):
+            levels, tests = segment_analysis(pair, treated, outcome, plan["segments"]["variables"])
+            level_rows.append(levels.assign(contrast=contrast, outcome=outcome))
+            test_rows.append(tests.assign(contrast=contrast, outcome=outcome))
+            if outcome == "conversion":
+                continue
+            described = describe_with_forest(
+                pair[outcome].to_numpy(dtype=float),
+                treated,
+                x,
+                names,
+                plan,
+                plan_seed(seed, plan["randomness"]["forest_stream"], c_index, o_index),
+            )
+            significant = float(((described.ci_low > 0) | (described.ci_high < 0)).mean())
+            top = sorted(described.importances, key=described.importances.get, reverse=True)[:3]
+            forest_rows.append(
+                {
+                    "contrast": contrast,
+                    "outcome": outcome,
+                    "mean": described.cate.mean(),
+                    "p5": np.percentile(described.cate, 5),
+                    "p95": np.percentile(described.cate, 95),
+                    "share_significant": significant,
+                    "top_features": ", ".join(top),
+                }
+            )
+            cate_rows.append(
+                pd.DataFrame(
+                    {
+                        "contrast": contrast,
+                        "outcome": outcome,
+                        "cate": described.cate,
+                        "ci_low": described.ci_low,
+                        "ci_high": described.ci_high,
+                    }
+                )
+            )
+    levels, tests, forest = (
+        pd.concat(level_rows, ignore_index=True),
+        pd.concat(test_rows, ignore_index=True),
+        pd.DataFrame(forest_rows),
+    )
+
+    x_all = covariate_matrix(frame)[names].to_numpy()
+    policy_seed = plan_seed(seed, plan["randomness"]["policy_stream"], 0)
+    comparisons = [
+        ("model_best_arm", "treat_all_mens"),
+        ("model_best_arm", "treat_all_womens"),
+        ("budget_model_mens", "budget_random_mens"),
+        ("budget_model_best_arm", "budget_random_mens"),
+    ]
+    curves, policy_tables = [], {}
+    for outcome in (plan["targeting"]["outcome"], plan["targeting"]["secondary_outcome"]):
+        effects = cross_fitted_effects(frame, x_all, outcome, plan, policy_seed)
+        values, differences = evaluate_policies(
+            effects, plan["targeting"]["budget_fraction"], 1000, policy_seed, comparisons
+        )
+        policy_tables[outcome] = (values.assign(outcome=outcome), differences.assign(outcome=outcome))
+        grid = np.linspace(0, 1, 51)
+        curves.append(
+            pd.concat([uplift_curve(effects, email, grid) for email in ("mens", "womens")]).assign(
+                outcome=outcome
+            )
+        )
+    curves = pd.concat(curves, ignore_index=True)
+
+    results_dir = paths.root / "reports" / "results" / "heterogeneity"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    tables = {
+        "blp_gates_clan": gates,
+        "verdicts": verdicts,
+        "segment_levels": levels,
+        "segment_tests": tests,
+        "forest_summary": forest,
+        "uplift_curves": curves,
+        "policy_values": pd.concat([v for v, _ in policy_tables.values()], ignore_index=True),
+        "policy_differences": pd.concat([d for _, d in policy_tables.values()], ignore_index=True),
+        "forest_cate": pd.concat(cate_rows, ignore_index=True),
+    }
+    for name, table in tables.items():
+        table.to_csv(results_dir / f"{name}.csv", index=False)
+    return render_heterogeneity_report(paths)
+
+
+HETEROGENEITY_TABLES = [
+    "blp_gates_clan",
+    "verdicts",
+    "segment_levels",
+    "segment_tests",
+    "forest_summary",
+    "uplift_curves",
+    "policy_values",
+    "policy_differences",
+    "forest_cate",
+]
+
+
+def render_heterogeneity_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
+    """Figures and report from the saved heterogeneity tables (no recomputation)."""
+    from causeway.heterogeneity import load_heterogeneity_plan
+
+    paths = paths or DataPaths()
+    plan = load_heterogeneity_plan()
+    results_dir = paths.root / "reports" / "results" / "heterogeneity"
+    figures_dir = paths.root / "reports" / "figures" / "heterogeneity"
+    tables = {name: pd.read_csv(results_dir / f"{name}.csv") for name in HETEROGENEITY_TABLES}
+    gates, verdicts, levels = tables["blp_gates_clan"], tables["verdicts"], tables["segment_levels"]
+    b1 = gates[gates["parameter"] == "b1"]
+    overall = {
+        o: dict(zip(b1[b1["outcome"] == o]["contrast"], b1[b1["outcome"] == o]["estimate"], strict=True))
+        for o in plan["scope"]["outcomes"]
+    }
+    cate = tables["forest_cate"]
+    cate_panels = []
+    for (contrast, outcome), group in cate.groupby(["contrast", "outcome"], sort=False):
+        significant = float(((group["ci_low"] > 0) | (group["ci_high"] < 0)).mean())
+        cate_panels.append(
+            {
+                "contrast": contrast,
+                "outcome": outcome,
+                "cate": group["cate"].to_numpy(),
+                "share_significant": significant,
+            }
+        )
+    curves = tables["uplift_curves"]
+    figures = [viz.gates_plot(gates, verdicts, figures_dir / "gates_by_predicted_effect.png")]
+    figures += [
+        viz.segment_forest(levels, overall[o], o, figures_dir / f"segment_effects_{o}.png")
+        for o in ("spend", "visit")
+    ]
+    figures.append(viz.cate_distribution(cate_panels, figures_dir / "forest_cate_distribution.png"))
+    figures += [
+        viz.uplift_curves(curves[curves["outcome"] == o], figures_dir / f"uplift_curves_{o}.png", o)
+        for o in ("spend", "visit")
+    ]
+    outcome = plan["targeting"]["outcome"]
+    values = tables["policy_values"][tables["policy_values"]["outcome"] == outcome]
+    differences = tables["policy_differences"][tables["policy_differences"]["outcome"] == outcome]
+    report_path = results_dir / "heterogeneity_report.md"
+    report_path.write_text(
+        _heterogeneity_markdown(
+            plan,
+            verdicts,
+            gates,
+            tables["segment_tests"],
+            levels,
+            tables["forest_summary"],
+            values,
+            differences,
+        )
+    )
+    write_provenance(results_dir, paths, heterogeneity_plan_version=plan["meta"]["version"])
+    return BenchmarkOutputs(tables, figures, report_path)

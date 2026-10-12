@@ -1,5 +1,6 @@
 """End-to-end Part I report on the synthetic fixture: every output is produced from computed values."""
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -53,3 +54,176 @@ def test_propensity_report_escapes_pipes_in_table_cells():
     summary = pd.DataFrame(columns=["comparison"])
     report = _propensity_markdown(load_benchmark_config(1), summary, diagnostics, {"python": "3.12"})
     assert "Max \\|SMD\\| x" in report and "\\\\|" not in report
+
+
+def test_heterogeneity_report_renders_every_figure_from_saved_tables(paths):
+    """Rendering uses only saved tables, so a figure bug never forces the 16-minute computation to rerun."""
+    from causeway.reporting import HETEROGENEITY_TABLES, render_heterogeneity_report
+
+    rng = np.random.default_rng(0)
+    results = paths.root / "reports" / "results" / "heterogeneity"
+    results.mkdir(parents=True)
+    paths.processed.mkdir(parents=True)
+    (paths.processed / "manifest.json").write_text(
+        '{"raw": {"sha256": "r"}, "processed": {"sha256": "p", "rows": 1}}'
+    )
+    contrasts, outcomes = ["mens_vs_control", "womens_vs_control"], ["spend", "visit", "conversion"]
+    params = ["b1", "b2", *[f"gate_{g}" for g in range(1, 6)], "gate_top_minus_bottom"]
+    gates = pd.DataFrame(
+        [
+            {
+                "contrast": c,
+                "outcome": o,
+                "parameter": p,
+                "estimate": 0.5,
+                "ci_low": 0.1,
+                "ci_high": 0.9,
+                "p_value": 0.5 if p != "b2" else 0.0001,
+                "n_splits": 100,
+            }
+            for c in contrasts
+            for o in outcomes
+            for p in params
+        ]
+    )
+    verdicts = pd.DataFrame(
+        [
+            {
+                "contrast": c,
+                "outcome": o,
+                "b2": 0.5,
+                "b2_p_value": 0.0001,
+                "gates_spread": 0.2,
+                "gates_spread_ci_low": 0.1,
+                "gates_spread_ci_high": 0.3,
+                "blp_evidence": True,
+                "gates_evidence": True,
+                "heterogeneity_detected": True,
+            }
+            for c in contrasts
+            for o in outcomes
+        ]
+    )
+    levels = pd.DataFrame(
+        [
+            {
+                "contrast": c,
+                "outcome": o,
+                "variable": v,
+                "level": lv,
+                "n_treated": 10,
+                "n_control": 10,
+                "estimate": 0.4,
+                "se": 0.1,
+                "ci_low": 0.2,
+                "ci_high": 0.6,
+                "p_value": 0.01,
+                "mde": 0.3,
+                "q_value": q,
+                "classification": k,
+            }
+            for c in contrasts
+            for o in outcomes
+            for v, lv, q, k in (
+                ("channel", "Web", 0.01, "benefit"),
+                ("channel", "Phone", 0.5, "inconclusive"),
+                ("newbie", "1", 0.01, "harm"),
+            )
+        ]
+    )
+    tests = pd.DataFrame(
+        [
+            {
+                "contrast": c,
+                "outcome": o,
+                "variable": v,
+                "chi2": 1.0,
+                "dof": 1,
+                "p_value": 0.3,
+                "q_value": 0.4,
+            }
+            for c in contrasts
+            for o in outcomes
+            for v in ("channel", "newbie")
+        ]
+    )
+    forest = pd.DataFrame(
+        [
+            {
+                "contrast": c,
+                "outcome": o,
+                "mean": 0.5,
+                "p5": 0.1,
+                "p95": 0.9,
+                "share_significant": 0.2,
+                "top_features": "a, b, c",
+            }
+            for c in contrasts
+            for o in ("spend", "visit")
+        ]
+    )
+    cate = pd.concat(
+        [
+            pd.DataFrame(
+                {"contrast": c, "outcome": o, "cate": rng.normal(size=50), "ci_low": -1.0, "ci_high": 1.0}
+            )
+            for c in contrasts
+            for o in ("spend", "visit")
+        ]
+    )
+    curves = pd.DataFrame(
+        [
+            {
+                "email": e,
+                "fraction_targeted": q,
+                "model_incremental_value": q,
+                "random_incremental_value": q,
+                "outcome": o,
+            }
+            for e in ("mens", "womens")
+            for q in (0.0, 0.5, 1.0)
+            for o in ("spend", "visit")
+        ]
+    )
+    values = pd.DataFrame(
+        [
+            {
+                "policy": "treat_all_mens",
+                "share_emailed": 1.0,
+                "incremental_value": 0.7,
+                "ci_low": 0.5,
+                "ci_high": 0.9,
+                "outcome": "spend",
+            }
+        ]
+    )
+    differences = pd.DataFrame(
+        [
+            {
+                "policy": "model_best_arm",
+                "versus": "treat_all_mens",
+                "difference": -0.1,
+                "ci_low": -0.3,
+                "ci_high": 0.1,
+                "interval_excludes_zero": False,
+                "outcome": "spend",
+            }
+        ]
+    )
+    tables = {
+        "blp_gates_clan": gates,
+        "verdicts": verdicts,
+        "segment_levels": levels,
+        "segment_tests": tests,
+        "forest_summary": forest,
+        "uplift_curves": curves,
+        "policy_values": values,
+        "policy_differences": differences,
+        "forest_cate": cate,
+    }
+    assert set(tables) == set(HETEROGENEITY_TABLES)
+    for name, table in tables.items():
+        table.to_csv(results / f"{name}.csv", index=False)
+    outputs = render_heterogeneity_report(paths)
+    assert len(outputs.figures) == 6 and all(f.exists() and f.stat().st_size > 0 for f in outputs.figures)
+    assert "Heterogeneity detected" in outputs.report_path.read_text()

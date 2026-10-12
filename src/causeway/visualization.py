@@ -843,3 +843,211 @@ def bias_rmse_summary(performance: pd.DataFrame, outcome: str, path: Path, estim
     )
     fig.tight_layout()
     return save(fig, path)
+
+
+CLASSIFICATION_MARKER = {"benefit": "o", "harm": "s", "inconclusive": "o"}
+
+
+def gates_plot(gates: pd.DataFrame, verdicts: pd.DataFrame, path: Path) -> Path:
+    """Do customers with larger predicted effects actually show larger effects on held-out data?"""
+    apply_style()
+    outcomes = list(dict.fromkeys(gates["outcome"]))
+    contrasts = list(dict.fromkeys(gates["contrast"]))
+    fig, axes = plt.subplots(
+        len(outcomes), len(contrasts), figsize=(10, 2.5 * len(outcomes) + 1), squeeze=False
+    )
+    for r, outcome in enumerate(outcomes):
+        label, scale, _ = OUTCOME_AXIS[outcome]
+        for c, contrast in enumerate(contrasts):
+            ax = axes[r, c]
+            sub = gates[(gates["outcome"] == outcome) & (gates["contrast"] == contrast)].set_index(
+                "parameter"
+            )
+            ate = sub.loc["b1"]
+            ax.axhspan(ate["ci_low"] * scale, ate["ci_high"] * scale, color=GRID, alpha=0.6, lw=0)
+            ax.axhline(ate["estimate"] * scale, color=INK_SECONDARY, lw=1)
+            ax.axhline(0, color=AXIS, lw=0.8)
+            for g in range(1, 6):
+                row = sub.loc[f"gate_{g}"]
+                ax.plot(
+                    [g, g],
+                    [row["ci_low"] * scale, row["ci_high"] * scale],
+                    color=CONTRAST_COLORS[contrast],
+                    lw=2,
+                    solid_capstyle="round",
+                )
+                ax.plot(g, row["estimate"] * scale, "o", color=CONTRAST_COLORS[contrast], ms=6, mec=SURFACE)
+            verdict = verdicts[(verdicts["outcome"] == outcome) & (verdicts["contrast"] == contrast)].iloc[0]
+            ax.set_title(
+                f"{CONTRAST_LABELS[contrast]} · {outcome}: BLP b2 = {verdict['b2']:.2f} "
+                + ("(p < 0.001)" if verdict["b2_p_value"] < 0.001 else f"(p = {verdict['b2_p_value']:.3f})"),
+                fontsize=8.5,
+            )
+            ax.set_xticks(range(1, 6), ["Q1\nlowest", "Q2", "Q3", "Q4", "Q5\nhighest"])
+            ax.grid(axis="x", visible=False)
+            if c == 0:
+                ax.set_ylabel(
+                    label.replace("Mean two-week spend ($)", "Effect on spend ($)").replace(
+                        " rate (percentage points)", " effect (pp)"
+                    )
+                )
+    fig.suptitle(
+        "Sorted group average effects (GATES) by quintile of predicted effect, held-out halves",
+        x=0.0,
+        ha="left",
+        fontweight="bold",
+        fontsize=10,
+    )
+    _footnote(
+        fig,
+        "Medians over 100 random splits; intervals have at least 95% coverage. Grey band: the average "
+        "effect (b1) with its interval. Flat GATES and b2 near 0 mean the predicted differences do not "
+        "replicate on new data.",
+    )
+    fig.tight_layout()
+    return save(fig, path)
+
+
+def segment_forest(levels: pd.DataFrame, overall: dict[str, float], outcome: str, path: Path) -> Path:
+    """Within each pre-specified segment, how large is the effect and how uncertain is it?"""
+    apply_style()
+    contrasts = list(dict.fromkeys(levels["contrast"]))
+    rows = levels[["variable", "level"]].drop_duplicates().itertuples(index=False)
+    rows = list(rows)
+    label, scale, _ = OUTCOME_AXIS[outcome]
+    fig, axes = plt.subplots(1, len(contrasts), figsize=(10, 0.24 * len(rows) + 1.8), sharey=True)
+    for ax, contrast in zip(np.atleast_1d(axes), contrasts, strict=True):
+        sub = levels[(levels["contrast"] == contrast) & (levels["outcome"] == outcome)]
+        ax.axvline(0, color=AXIS, lw=1)
+        ax.axvline(overall[contrast] * scale, color=INK_SECONDARY, lw=1, ls="--")
+        for i, (variable, level) in enumerate(rows):
+            row = sub[(sub["variable"] == variable) & (sub["level"] == level)].iloc[0]
+            color = CONTRAST_COLORS[contrast] if row["classification"] != "harm" else STATUS_CRITICAL
+            ax.plot(
+                [row["ci_low"] * scale, row["ci_high"] * scale],
+                [i, i],
+                color=color,
+                lw=1.8,
+                solid_capstyle="round",
+            )
+            ax.plot(
+                row["estimate"] * scale,
+                i,
+                CLASSIFICATION_MARKER[row["classification"]],
+                ms=5,
+                color=color if row["classification"] != "inconclusive" else SURFACE,
+                markeredgecolor=color,
+            )
+        ax.set_title(CONTRAST_LABELS[contrast], fontsize=9)
+        ax.set_xlabel(
+            label.replace("Mean two-week spend ($)", "Effect on spend ($)").replace(
+                " rate (percentage points)", " effect (pp)"
+            )
+        )
+        ax.grid(axis="y", visible=False)
+        for boundary in range(1, len(rows)):
+            if rows[boundary][0] != rows[boundary - 1][0]:
+                ax.axhline(boundary - 0.5, color=GRID, lw=0.8)
+    first = np.atleast_1d(axes)[0]
+    first.set_yticks(range(len(rows)), [f"{v}: {lv}" for v, lv in rows], fontsize=7)
+    first.set_ylim(len(rows) - 0.5, -0.5)
+    fig.suptitle(
+        f"{outcome.capitalize()}: effect within pre-specified segments (exploratory)",
+        x=0.0,
+        ha="left",
+        fontweight="bold",
+        fontsize=10,
+    )
+    _footnote(
+        fig,
+        "Filled marker: BH q < 0.05 (benefit); hollow: inconclusive. Dashed line: overall effect. "
+        "95% intervals, unadjusted for multiplicity; wide intervals are results, not noise to hide.",
+    )
+    fig.tight_layout()
+    return save(fig, path)
+
+
+def cate_distribution(panels: list[dict], path: Path) -> Path:
+    """How widely do the forest's predicted individual effects spread, relative to their uncertainty?"""
+    apply_style()
+    fig, axes = plt.subplots(1, len(panels), figsize=(3.6 * len(panels), 2.9))
+    for ax, panel in zip(np.atleast_1d(axes), panels, strict=True):
+        _, scale, _ = OUTCOME_AXIS[panel["outcome"]]
+        ax.hist(
+            panel["cate"] * scale,
+            bins=50,
+            color=CONTRAST_COLORS[panel["contrast"]],
+            alpha=0.5,
+            edgecolor=SURFACE,
+            linewidth=0.3,
+        )
+        ax.axvline(0, color=AXIS, lw=1)
+        ax.set_title(f"{CONTRAST_LABELS[panel['contrast']]} · {panel['outcome']}", fontsize=8.5)
+        ax.set_xlabel("Predicted effect" + (" ($)" if panel["outcome"] == "spend" else " (pp)"))
+        ax.grid(axis="x", visible=False)
+        ax.annotate(
+            f"pointwise 95% CI excludes 0:\n{panel['share_significant']:.1%} of customers",
+            (0.98, 0.95),
+            xycoords="axes fraction",
+            ha="right",
+            va="top",
+            fontsize=7,
+            color=INK_SECONDARY,
+        )
+    np.atleast_1d(axes)[0].set_ylabel("Customers")
+    fig.suptitle(
+        "Causal forest: predicted individual effects (descriptive)",
+        x=0.0,
+        ha="left",
+        fontweight="bold",
+        fontsize=10,
+    )
+    _footnote(
+        fig,
+        "Spread in point predictions is not evidence of heterogeneity on its own; the formal test (GATES "
+        "and BLP) decides. Pointwise intervals are not adjusted for testing every customer.",
+    )
+    fig.tight_layout()
+    return save(fig, path)
+
+
+def uplift_curves(curves: pd.DataFrame, path: Path, outcome: str) -> Path:
+    """Does ranking customers by predicted effect beat random targeting of the same number of customers?"""
+    apply_style()
+    emails = list(dict.fromkeys(curves["email"]))
+    _, scale, _ = OUTCOME_AXIS[outcome]
+    fig, axes = plt.subplots(1, len(emails), figsize=(4.6 * len(emails), 3.1), sharey=True)
+    for ax, email in zip(np.atleast_1d(axes), emails, strict=True):
+        sub = curves[curves["email"] == email]
+        arm = "Mens E-Mail" if email == "mens" else "Womens E-Mail"
+        ax.plot(
+            sub["fraction_targeted"] * 100,
+            sub["model_incremental_value"] * scale,
+            color=ARM_COLORS[arm],
+            lw=2,
+            label="Ranked by predicted effect",
+        )
+        ax.plot(
+            sub["fraction_targeted"] * 100,
+            sub["random_incremental_value"] * scale,
+            color=INK_MUTED,
+            lw=1.5,
+            ls="--",
+            label="Random selection",
+        )
+        ax.axhline(0, color=AXIS, lw=0.8)
+        ax.set_title(f"{arm} vs No E-Mail", fontsize=9)
+        ax.set_xlabel("Customers e-mailed (%)")
+        ax.legend(loc="upper left", fontsize=7.5)
+    np.atleast_1d(axes)[0].set_ylabel(
+        "Incremental " + ("spend per customer ($)" if outcome == "spend" else "visits per customer (pp)")
+    )
+    fig.suptitle(f"Held-out uplift curves ({outcome})", x=0.0, ha="left", fontweight="bold", fontsize=10)
+    _footnote(
+        fig,
+        "Estimated policy values from cross-fitted predictions and inverse probability weighting on the "
+        "randomized data. These policies were never run. Point estimates; intervals are in the policy "
+        "table.",
+    )
+    fig.tight_layout()
+    return save(fig, path)

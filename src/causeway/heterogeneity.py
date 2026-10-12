@@ -14,6 +14,7 @@ from scipy import stats
 from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import HistGradientBoostingRegressor
 from statsmodels.stats.multitest import multipletests
+from threadpoolctl import threadpool_limits
 
 from causeway.config import CONFIG_DIR
 from causeway.experiment import neyman_difference
@@ -44,10 +45,6 @@ def causal_forest(plan: dict, seed: int) -> CausalForestDML:
     )
 
 
-def _ols(y: np.ndarray, design: np.ndarray):
-    return sm.OLS(y, design).fit(cov_type="HC1")
-
-
 def blp_gates_clan(
     y: np.ndarray,
     treated: np.ndarray,
@@ -61,45 +58,41 @@ def blp_gates_clan(
     """BLP, GATES and CLAN on the main half, given proxies fitted on the auxiliary half."""
     t = treated.astype(float)
     p = t.mean()
-    s_centred = proxy_cate - proxy_cate.mean()
     z = stats.norm.ppf(1 - (1 - ci_level) / 2)
-    out = {}
 
-    blp = _ols(y, np.column_stack([np.ones_like(t), proxy_baseline, t - p, (t - p) * s_centred]))
-    for name, index in (("b1", 2), ("b2", 3)):
-        estimate, se = float(blp.params[index]), float(blp.bse[index])
-        out[name] = {
+    def interval(estimate: float, se: float, p_value: float) -> dict:
+        return {
             "estimate": estimate,
             "se": se,
             "ci_low": estimate - z * se,
             "ci_high": estimate + z * se,
-            "p_value": float(blp.pvalues[index]),
+            "p_value": p_value,
         }
+
+    out = {}
+    s_centred = proxy_cate - proxy_cate.mean()
+    blp = sm.OLS(y, np.column_stack([np.ones_like(t), proxy_baseline, t - p, (t - p) * s_centred])).fit(
+        cov_type="HC1"
+    )
+    for name, i in (("b1", 2), ("b2", 3)):
+        out[name] = interval(float(blp.params[i]), float(blp.bse[i]), float(blp.pvalues[i]))
 
     ranks = stats.rankdata(proxy_cate, method="ordinal")
     groups = np.minimum((ranks - 1) * n_groups // len(ranks), n_groups - 1)
     dummies = np.column_stack([(groups == g).astype(float) for g in range(n_groups)])
-    gates = _ols(y, np.column_stack([np.ones_like(t), proxy_baseline, (t - p)[:, None] * dummies]))
+    gates = sm.OLS(y, np.column_stack([np.ones_like(t), proxy_baseline, (t - p)[:, None] * dummies])).fit(
+        cov_type="HC1"
+    )
     for g in range(n_groups):
-        estimate, se = float(gates.params[2 + g]), float(gates.bse[2 + g])
-        out[f"gate_{g + 1}"] = {
-            "estimate": estimate,
-            "se": se,
-            "ci_low": estimate - z * se,
-            "ci_high": estimate + z * se,
-            "p_value": float(gates.pvalues[2 + g]),
-        }
+        out[f"gate_{g + 1}"] = interval(
+            float(gates.params[2 + g]), float(gates.bse[2 + g]), float(gates.pvalues[2 + g])
+        )
     contrast = np.zeros(len(gates.params))
     contrast[2 + n_groups - 1], contrast[2] = 1.0, -1.0
     test = gates.t_test(contrast)
-    estimate, se = float(np.squeeze(test.effect)), float(np.squeeze(test.sd))
-    out["gate_top_minus_bottom"] = {
-        "estimate": estimate,
-        "se": se,
-        "ci_low": estimate - z * se,
-        "ci_high": estimate + z * se,
-        "p_value": float(np.squeeze(test.pvalue)),
-    }
+    out["gate_top_minus_bottom"] = interval(
+        float(np.squeeze(test.effect)), float(np.squeeze(test.sd)), float(np.squeeze(test.pvalue))
+    )
 
     top, bottom = groups == n_groups - 1, groups == 0
     for j, name in enumerate(covariate_names):
@@ -108,11 +101,7 @@ def blp_gates_clan(
         se = float(np.sqrt(a.var(ddof=1) / len(a) + b.var(ddof=1) / len(b)))
         p_value = float(2 * stats.norm.sf(abs(estimate) / se)) if se > 0 else float(estimate == 0)
         out[f"clan_{name}"] = {
-            "estimate": estimate,
-            "se": se,
-            "ci_low": estimate - z * se,
-            "ci_high": estimate + z * se,
-            "p_value": p_value,
+            **interval(estimate, se, p_value),
             "top_mean": float(a.mean()),
             "bottom_mean": float(b.mean()),
         }
@@ -272,7 +261,5 @@ def split_task(
     y: np.ndarray, treated: np.ndarray, x: np.ndarray, names: list[str], plan: dict, seed: int
 ) -> dict:
     """One split with a single thread, for parallel execution."""
-    from threadpoolctl import threadpool_limits
-
     with threadpool_limits(limits=1):
         return run_split(y, treated, x, names, plan, seed)

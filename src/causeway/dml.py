@@ -14,14 +14,7 @@ from causeway.estimators import CrossFitResult, Estimate, cross_fitted_scores
 # A tiny threshold turns that off (zero itself isn't accepted).
 NO_CLIPPING = PSProcessorConfig(clipping_threshold=1e-12, extreme_threshold=1e-12)
 
-
-def gbm_classifier(seed: int) -> HistGradientBoostingClassifier:
-    """Default hyperparameters; the seed only fixes the early-stopping validation split."""
-    return HistGradientBoostingClassifier(random_state=seed)
-
-
-def gbm_regressor(seed: int) -> HistGradientBoostingRegressor:
-    return HistGradientBoostingRegressor(random_state=seed)
+# Learners keep their default hyperparameters; the seed only fixes the early-stopping validation split.
 
 
 def doubleml_irm(
@@ -40,8 +33,8 @@ def doubleml_irm(
     )
     model = doubleml.DoubleMLIRM(
         doubleml.DoubleMLData(data, "_y", "_d", list(covariates.columns)),
-        ml_g=gbm_regressor(seed),
-        ml_m=gbm_classifier(seed),
+        ml_g=HistGradientBoostingRegressor(random_state=seed),
+        ml_m=HistGradientBoostingClassifier(random_state=seed),
         n_folds=len(folds),
         n_rep=1,
         score="ATE",
@@ -64,5 +57,10 @@ def hand_dml(
 ) -> CrossFitResult:
     """The same orthogonal-score estimator written out directly, for validation against DoubleML."""
     return cross_fitted_scores(
-        y, treated, covariates, folds, lambda: gbm_classifier(seed), lambda: gbm_regressor(seed)
+        y,
+        treated,
+        covariates,
+        folds,
+        lambda: HistGradientBoostingClassifier(random_state=seed),
+        lambda: HistGradientBoostingRegressor(random_state=seed),
     )

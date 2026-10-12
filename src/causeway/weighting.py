@@ -9,7 +9,7 @@ from scipy import stats
 
 
 @dataclass
-class WeightedEstimate:
+class Estimate:
     estimate: float
     se: float
     ci_low: float
@@ -28,7 +28,7 @@ def att_weights(scores: np.ndarray, treated: np.ndarray) -> np.ndarray:
 
 def hajek_difference(
     y: np.ndarray, treated: np.ndarray, weights: np.ndarray, ci_level: float = 0.95
-) -> WeightedEstimate:
+) -> Estimate:
     """Difference of Hajek-normalised weighted means.
 
     The SE treats the weights as fixed, which is conservative for the ATE when the propensity is estimated.
@@ -43,7 +43,7 @@ def hajek_difference(
         means.append(mean)
     estimate, se = means[0] - means[1], float(np.sqrt(variance))
     z = stats.norm.ppf(1 - (1 - ci_level) / 2)
-    return WeightedEstimate(float(estimate), se, float(estimate - z * se), float(estimate + z * se))
+    return Estimate(float(estimate), se, float(estimate - z * se), float(estimate + z * se))
 
 
 def kish_ess(weights: np.ndarray) -> float:

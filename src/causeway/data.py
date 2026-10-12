@@ -54,10 +54,6 @@ def _fetch_verified(source: Source) -> bytes:
     return payload
 
 
-def _make_read_only(path: Path) -> None:
-    path.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
-
-
 def raw_path(config: DataConfig, paths: DataPaths) -> Path:
     return paths.raw / config.raw_filename
 
@@ -99,7 +95,7 @@ def acquire_raw(config: DataConfig, paths: DataPaths) -> tuple[Path, dict]:
             handle.write(payload)
             temporary = Path(handle.name)
         os.replace(temporary, target)
-        _make_read_only(target)
+        target.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
         provenance = {
             "source": source.name,
             "url": source.url,

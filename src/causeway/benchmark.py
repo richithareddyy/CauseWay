@@ -7,12 +7,13 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-from scipy import special, stats
+from scipy import special
 
 from causeway.balance import standardized_mean_difference
 from causeway.config import load_benchmark_config
 from causeway.experiment import neyman_difference
 from causeway.features import COVARIATE_COLUMNS, covariate_matrix
+from causeway.weighting import ate_weights, hajek_difference, kish_ess
 
 # Encoded columns derived from each raw covariate named in the specification.
 ENCODED_COLUMNS = {
@@ -120,6 +121,22 @@ class Pair:
         hidden = set(self.designs[scenario].hidden)
         return [c for raw in spec["analyst"]["covariates"] if raw not in hidden for c in ENCODED_COLUMNS[raw]]
 
+    def analyst_categorical(self, scenario: str) -> pd.DataFrame:
+        """The alt_categorical encoding: recency and spend history as dummies, hidden covariates removed."""
+        design = categorical_design(self.frame)
+        hidden = set(self.designs[scenario].hidden)
+        prefixes = tuple(f"{raw}_" for raw in hidden) + tuple(raw for raw in hidden)
+        return design[[c for c in design.columns if not c.startswith(prefixes)]]
+
+
+def categorical_design(frame: pd.DataFrame) -> pd.DataFrame:
+    recency = pd.get_dummies(frame["recency"].astype(int), prefix="recency", drop_first=True, dtype=float)
+    history = pd.get_dummies(
+        frame["history_segment"].astype(str), prefix="history", drop_first=True, dtype=float
+    )
+    others = covariate_matrix(frame).drop(columns=["ln_history", "recency"])
+    return pd.concat([recency, history, others], axis=1)
+
 
 def build_pair(processed: pd.DataFrame, comparison: dict, spec: dict) -> Pair:
     arms = [comparison["treatment_arm"], comparison["control_arm"]]
@@ -170,17 +187,6 @@ def overlap_guard(pair: Pair, spec: dict) -> list[dict]:
     return rows
 
 
-def _hajek_difference(y: np.ndarray, treated: np.ndarray, weights: np.ndarray) -> tuple[float, float]:
-    """Weighted difference in Hajek means with a linearization standard error."""
-    out, var = [], 0.0
-    for mask in (treated, ~treated):
-        w, values = weights[mask], y[mask]
-        mean = (w * values).sum() / w.sum()
-        var += ((w * (values - mean)) ** 2).sum() / w.sum() ** 2
-        out.append(mean)
-    return float(out[0] - out[1]), float(np.sqrt(var))
-
-
 def experimental_benchmarks(pair: Pair, spec: dict) -> pd.DataFrame:
     """Finite-population targets computed on the full randomized pair, matched to each estimand."""
     outcomes = [spec["outcomes"]["primary"], *spec["outcomes"]["secondary"]]
@@ -192,8 +198,16 @@ def experimental_benchmarks(pair: Pair, spec: dict) -> pd.DataFrame:
             ate = neyman_difference(y[pair.treated], y[~pair.treated])
             rows.append({**base, "estimand": "ATE", "value": ate.estimate, "se": ate.se, "n_units": len(y)})
             for estimand, weights in (("ATT", design.e_star), ("ATC", 1 - design.e_star)):
-                value, se = _hajek_difference(y, pair.treated, weights)
-                rows.append({**base, "estimand": estimand, "value": value, "se": se, "n_units": len(y)})
+                weighted = hajek_difference(y, pair.treated, weights)
+                rows.append(
+                    {
+                        **base,
+                        "estimand": estimand,
+                        "value": weighted.estimate,
+                        "se": weighted.se,
+                        "n_units": len(y),
+                    }
+                )
             for low, high in spec["trimming"]["sensitivity_bounds"]:
                 keep = (design.e_star >= low) & (design.e_star <= high)
                 trimmed = neyman_difference(y[keep & pair.treated], y[keep & ~pair.treated])
@@ -210,19 +224,13 @@ def experimental_benchmarks(pair: Pair, spec: dict) -> pd.DataFrame:
 
 
 def oracle_ipw(y: np.ndarray, treated: np.ndarray, e_star: np.ndarray, ci_level: float) -> dict:
-    """Hajek IPW with the TRUE design propensity: a validity check on the construction, not an estimator
-    an analyst could use. Influence-function standard error; Kish effective sample size per arm."""
-    weights = np.where(treated, 1 / e_star, 1 / (1 - e_star))
-    estimate, se = _hajek_difference(y, treated, weights)
-    z = stats.norm.ppf(1 - (1 - ci_level) / 2)
-    w1, w0 = weights[treated], weights[~treated]
+    """Hajek IPW with the true design propensity. It checks the construction; no analyst could use it."""
+    weights = ate_weights(e_star, treated)
+    result = hajek_difference(y, treated, weights, ci_level)
     return {
-        "estimate": estimate,
-        "se": se,
-        "ci_low": estimate - z * se,
-        "ci_high": estimate + z * se,
-        "ess_treated": float(w1.sum() ** 2 / (w1**2).sum()),
-        "ess_control": float(w0.sum() ** 2 / (w0**2).sum()),
+        **result.__dict__,
+        "ess_treated": kish_ess(weights[treated]),
+        "ess_control": kish_ess(weights[~treated]),
     }
 
 
@@ -339,10 +347,15 @@ def monte_carlo_summary(estimates: pd.DataFrame, benchmarks: pd.DataFrame) -> pd
     merged["covered"] = (merged["ci_low"] <= merged["benchmark_value"]) & (
         merged["benchmark_value"] <= merged["ci_high"]
     )
-    merged["failed"] = ~np.isfinite(merged["estimate"]) | ~np.isfinite(merged["se"])
     keys = ["comparison", "scenario", "outcome", "estimator", "estimand", "benchmark"]
+    if "specification" in merged:
+        keys.append("specification")
+    # Boosted g-computation has no analytic SE, so a missing SE only counts as a failure for estimators
+    # that report one; SE-free estimators are judged on bias and RMSE.
+    reports_se = merged.groupby(keys, sort=False, dropna=False)["se"].transform(lambda se: se.notna().any())
+    merged["failed"] = ~np.isfinite(merged["estimate"]) | (reports_se & ~np.isfinite(merged["se"]))
     rows = []
-    for key, group in merged.groupby(keys, sort=False):
+    for key, group in merged.groupby(keys, sort=False, dropna=False):
         ok = group[~group["failed"]]
         sd = ok["estimate"].std(ddof=1)
         row = dict(zip(keys, key, strict=True))
@@ -359,7 +372,7 @@ def monte_carlo_summary(estimates: pd.DataFrame, benchmarks: pd.DataFrame) -> pd
                 "estimator_variance": sd**2,
                 "mean_se": ok["se"].mean(),
                 "se_to_sd_ratio": ok["se"].mean() / sd,
-                "coverage": ok["covered"].mean(),
+                "coverage": ok["covered"].mean() if ok["se"].notna().any() else np.nan,
                 "failure_rate": group["failed"].mean(),
             }
         )
@@ -380,7 +393,7 @@ def naive_bias_decomposition(pair: Pair, spec: dict) -> pd.DataFrame:
         for outcome in outcomes:
             y = pair.frame[outcome].to_numpy(dtype=float)
             ate = y[t].mean() - y[c].mean()
-            att, _ = _hajek_difference(y, t, e)
+            att = hajek_difference(y, t, e).estimate
             naive_target = np.average(y[t], weights=e[t]) - np.average(y[c], weights=1 - e[c])
             baseline = np.average(y[c], weights=e[c]) - np.average(y[c], weights=1 - e[c])
             rows.append(

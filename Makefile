@@ -42,6 +42,7 @@ analysis:
 	$(RUN) estimation
 	$(RUN) compare
 	$(RUN) heterogeneity
+	$(RUN) robustness
 
 env:
 	$(RUN) env

@@ -16,7 +16,7 @@ def outputs(data_config, paths):
 
 
 def test_report_files_and_figures_exist(outputs, paths):
-    results_dir = paths.root / "reports" / "results" / "experiment"
+    results_dir = paths.results("experiment")
     for name in ["effects.csv", "binary.csv", "balance.csv", "summary.json", "experiment_report.md"]:
         assert (results_dir / name).exists()
     assert len(outputs.figures) == 5 and all(f.exists() and f.stat().st_size > 0 for f in outputs.figures)
@@ -61,7 +61,7 @@ def test_heterogeneity_report_renders_every_figure_from_saved_tables(paths):
     from causeway.reporting import HETEROGENEITY_TABLES, render_heterogeneity_report
 
     rng = np.random.default_rng(0)
-    results = paths.root / "reports" / "results" / "heterogeneity"
+    results = paths.results("heterogeneity")
     results.mkdir(parents=True)
     paths.processed.mkdir(parents=True)
     (paths.processed / "manifest.json").write_text(
@@ -227,3 +227,27 @@ def test_heterogeneity_report_renders_every_figure_from_saved_tables(paths):
     outputs = render_heterogeneity_report(paths)
     assert len(outputs.figures) == 6 and all(f.exists() and f.stat().st_size > 0 for f in outputs.figures)
     assert "Heterogeneity detected" in outputs.report_path.read_text()
+
+
+def test_robustness_report_runs_end_to_end(paths, monkeypatch):
+    from causeway import reporting, robustness
+    from causeway.processing import TransformationLog, build_interim, build_processed
+    from conftest import make_raw_frame
+
+    log = TransformationLog()
+    frame = build_processed(build_interim(make_raw_frame(n_per_arm=1500, seed=13), log), log)
+    monkeypatch.setattr(reporting, "load_processed", lambda _: frame)
+    plan = robustness.load_robustness_plan()
+    plan["benchmark"]["n_draws"] = plan["refutation"]["n_draws"] = 1
+    plan["randomness"]["bootstrap_stability_streams"] = [3001]
+    monkeypatch.setattr(robustness, "load_robustness_plan", lambda: plan)
+    paths.processed.mkdir(parents=True)
+    (paths.processed / "manifest.json").write_text(
+        '{"raw": {"sha256": "r"}, "processed": {"sha256": "p", "rows": 1}}'
+    )
+
+    outputs = reporting.run_robustness_report(paths, n_jobs=1)
+    assert outputs.figures and all(f.exists() and f.stat().st_size > 0 for f in outputs.figures)
+    summary = pd.read_csv(paths.results("robustness") / "specification_summary.csv")
+    boosted = summary[summary["estimator"] == "outcome_regression"]
+    assert boosted["bias"].notna().all() and (boosted["failure_rate"] == 0).all()

@@ -50,10 +50,6 @@ class ProvenanceMismatch(RuntimeError):
     """Outputs being combined were produced from different data, specifications or seeds."""
 
 
-def _results_dir(paths: DataPaths, name: str):
-    return paths.root / "reports" / "results" / name
-
-
 def check_provenance(records: dict[str, dict]) -> dict:
     """Every source must share the data checksum, benchmark specification, seed and number of draws."""
     reference_name, reference = next(iter(records.items()))
@@ -69,9 +65,9 @@ def load_benchmark_estimates(paths: DataPaths, n_draws: int) -> tuple[pd.DataFra
     completeness.
     """
     sources = ["propensity", "estimation"]
-    records = {name: read_provenance(_results_dir(paths, name)) for name in sources}
+    records = {name: read_provenance(paths.results(name)) for name in sources}
     provenance = check_provenance(records)
-    frames = {name: pd.read_csv(_results_dir(paths, name) / "estimates.csv") for name in sources}
+    frames = {name: pd.read_csv(paths.results(name) / "estimates.csv") for name in sources}
 
     keys = ["comparison", "scenario", "draw", "outcome", "estimator"]
     shared = [
@@ -196,7 +192,7 @@ def load_comparison_inputs(paths: DataPaths | None = None) -> dict:
     paths = paths or DataPaths()
     spec = load_benchmark_config(1)
     estimates, provenance = load_benchmark_estimates(paths, spec["randomness"]["n_draws"])
-    experiment_provenance = read_provenance(_results_dir(paths, "experiment"))
+    experiment_provenance = read_provenance(paths.results("experiment"))
     if experiment_provenance["data"]["processed_sha256"] != provenance["data"]["processed_sha256"]:
         raise ProvenanceMismatch("the Part I results were produced from different processed data")
     frame = load_processed(paths)
@@ -204,7 +200,7 @@ def load_comparison_inputs(paths: DataPaths | None = None) -> dict:
         [experimental_benchmarks(build_pair(frame, c, spec), spec) for c in spec["comparisons"]],
         ignore_index=True,
     )
-    experiment_effects = pd.read_csv(_results_dir(paths, "experiment") / "effects.csv")
+    experiment_effects = pd.read_csv(paths.results("experiment") / "effects.csv")
     return {
         "spec": spec,
         "estimates": estimates,

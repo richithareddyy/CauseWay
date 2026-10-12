@@ -76,7 +76,7 @@ def benchmarks():
 
 
 def write_source(root, name, estimates, provenance):
-    directory = root / "reports" / "results" / name
+    directory = DataPaths(root=root).results(name)
     directory.mkdir(parents=True)
     estimates.to_csv(directory / "estimates.csv", index=False)
     (directory / PROVENANCE_FILE).write_text(json.dumps(provenance))

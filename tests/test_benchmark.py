@@ -11,7 +11,6 @@ from scipy import special
 import causeway.config as config
 from causeway.benchmark import (
     OverlapGuardError,
-    _hajek_difference,
     acceptance_probabilities,
     build_pair,
     calibrate_intercept,
@@ -25,6 +24,7 @@ from causeway.benchmark import (
 )
 from causeway.config import FrozenSpecificationError, load_benchmark_config
 from causeway.processing import TransformationLog, build_interim, build_processed
+from causeway.weighting import hajek_difference
 from conftest import make_raw_frame
 
 
@@ -98,9 +98,9 @@ def test_oracle_ipw_recovers_the_full_trial_difference_with_heterogeneous_effect
 def test_hajek_difference_reduces_to_difference_in_means_and_weights_toward_att():
     y = np.array([4.0, 6.0, 1.0, 3.0])
     treated = np.array([True, True, False, False])
-    assert _hajek_difference(y, treated, np.ones(4))[0] == pytest.approx(5.0 - 2.0)
+    assert hajek_difference(y, treated, np.ones(4)).estimate == pytest.approx(5.0 - 2.0)
     weights = np.array([3.0, 1.0, 3.0, 1.0])
-    assert _hajek_difference(y, treated, weights)[0] == pytest.approx((12 + 6) / 4 - (3 + 3) / 4)
+    assert hajek_difference(y, treated, weights).estimate == pytest.approx((12 + 6) / 4 - (3 + 3) / 4)
 
 
 def test_pair_designs_share_selection_between_a_and_c(processed, spec):
@@ -178,3 +178,26 @@ def test_modified_frozen_specification_is_refused(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "CONFIG_DIR", tmp_path / "configs")
     with pytest.raises(FrozenSpecificationError, match="create a new version"):
         load_benchmark_config(1)
+
+
+def test_estimators_without_standard_errors_are_judged_on_bias_not_counted_as_failures():
+    estimates = pd.DataFrame(
+        {
+            "comparison": "c",
+            "scenario": "A",
+            "outcome": "y",
+            "estimator": "g",
+            "estimand": "ATE",
+            "benchmark": "ATE",
+            "estimate": [1.0, 2.0],
+            "se": np.nan,
+            "ci_low": np.nan,
+            "ci_high": np.nan,
+        }
+    )
+    benchmarks = pd.DataFrame(
+        {"comparison": ["c"], "scenario": ["A"], "outcome": ["y"], "estimand": ["ATE"], "value": [1.0]}
+    )
+    row = monte_carlo_summary(estimates, benchmarks).iloc[0]
+    assert row["failure_rate"] == 0.0 and row["bias"] == pytest.approx(0.5)
+    assert np.isnan(row["coverage"])

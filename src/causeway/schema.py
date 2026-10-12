@@ -18,17 +18,6 @@ COLUMNS = [
     "conversion",
     "spend",
 ]
-PRETREATMENT_COVARIATES = [
-    "recency",
-    "history_segment",
-    "history",
-    "mens",
-    "womens",
-    "zip_code",
-    "newbie",
-    "channel",
-]
-TREATMENT = "segment"
 OUTCOMES = ["visit", "conversion", "spend"]
 
 BINARY_COLUMNS = ["mens", "womens", "newbie", "visit", "conversion"]

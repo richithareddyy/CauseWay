@@ -12,10 +12,15 @@ import pandas as pd
 from causeway import eda, schema
 from causeway import visualization as viz
 from causeway.balance import standardized_mean_difference
+from causeway.benchmark import (
+    experimental_benchmarks,
+    monte_carlo_summary,
+    naive_bias_decomposition,
+    run_construction_study,
+)
 from causeway.comparison import ASSUMPTIONS
-from causeway.config import DataPaths
+from causeway.config import DataPaths, load_benchmark_config
 from causeway.experiment import (
-    ExperimentResults,
     analyze_experiment,
     assignment_by_strata,
     load_experiment_plan,
@@ -26,12 +31,25 @@ from causeway.provenance import write_provenance
 
 
 @dataclass
-class ExperimentOutputs:
-    results: ExperimentResults
+class ReportOutputs:
     tables: dict[str, pd.DataFrame]
-    boundary: dict
     figures: list[Path]
     report_path: Path
+
+
+def _save_tables(directory: Path, tables: dict[str, pd.DataFrame]) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    for name, table in tables.items():
+        table.to_csv(directory / f"{name}.csv", index=False)
+
+
+def _relative_errors(estimates: pd.DataFrame, benchmarks: pd.DataFrame) -> pd.DataFrame:
+    """Each estimate's error as a share of the benchmark for its own estimand."""
+    keys = ["comparison", "scenario", "outcome", "benchmark"]
+    targets = benchmarks.rename(columns={"estimand": "benchmark", "value": "benchmark_value"})
+    merged = estimates.merge(targets[[*keys, "benchmark_value"]], on=keys)
+    merged["relative_error"] = (merged["estimate"] - merged["benchmark_value"]) / merged["benchmark_value"]
+    return merged
 
 
 def randomization_balance(frame: pd.DataFrame) -> pd.DataFrame:
@@ -213,14 +231,14 @@ def _markdown_report(outputs: dict, plan: dict, boundary: dict, env: dict) -> st
     return "\n".join(lines)
 
 
-def run_experiment_report(paths: DataPaths | None = None) -> ExperimentOutputs:
+def run_experiment_report(paths: DataPaths | None = None) -> ReportOutputs:
     paths = paths or DataPaths()
     frame = load_processed(paths)
     plan = load_experiment_plan()
     results = analyze_experiment(frame, plan)
 
-    results_dir = paths.root / "reports" / "results" / "experiment"
-    figures_dir = paths.root / "reports" / "figures" / "experiment"
+    results_dir = paths.results("experiment")
+    figures_dir = paths.figures("experiment")
     results_dir.mkdir(parents=True, exist_ok=True)
 
     boundary = eda.spend_boundary(frame, plan["spend_boundary"]["near_boundary_bins"])
@@ -270,14 +288,7 @@ def run_experiment_report(paths: DataPaths | None = None) -> ExperimentOutputs:
     report_path = results_dir / "experiment_report.md"
     report_path.write_text(_markdown_report(tables, plan, boundary, env))
     write_provenance(results_dir, paths, experiment_plan_version=plan["meta"]["version"])
-    return ExperimentOutputs(results, tables, boundary, figures, report_path)
-
-
-@dataclass
-class BenchmarkOutputs:
-    tables: dict[str, pd.DataFrame]
-    figures: list[Path]
-    report_path: Path
+    return ReportOutputs(tables, figures, report_path)
 
 
 def _benchmark_markdown(spec: dict, tables: dict[str, pd.DataFrame], env: dict) -> str:
@@ -407,9 +418,7 @@ def _benchmark_markdown(spec: dict, tables: dict[str, pd.DataFrame], env: dict) 
     return "\n".join(lines)
 
 
-def run_benchmark_construction_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
-    from causeway.benchmark import monte_carlo_summary, naive_bias_decomposition, run_construction_study
-    from causeway.config import load_benchmark_config
+def run_benchmark_construction_report(paths: DataPaths | None = None) -> ReportOutputs:
 
     paths = paths or DataPaths()
     spec = load_benchmark_config(1)
@@ -483,11 +492,7 @@ def run_benchmark_construction_report(paths: DataPaths | None = None) -> Benchma
                 }
             )
 
-    ate = study.benchmarks[study.benchmarks["estimand"] == "ATE"][
-        ["comparison", "scenario", "outcome", "value"]
-    ]
-    relative = study.estimates.merge(ate, on=["comparison", "scenario", "outcome"])
-    relative["relative_error"] = (relative["estimate"] - relative["value"]) / relative["value"]
+    relative = _relative_errors(study.estimates, study.benchmarks)
 
     tables = {
         "overlap_guard": study.guard,
@@ -501,11 +506,9 @@ def run_benchmark_construction_report(paths: DataPaths | None = None) -> Benchma
         "draws": draws,
         "estimates": study.estimates,
     }
-    results_dir = paths.root / "reports" / "results" / "benchmark"
-    figures_dir = paths.root / "reports" / "figures" / "benchmark"
-    results_dir.mkdir(parents=True, exist_ok=True)
-    for name, table in tables.items():
-        table.to_csv(results_dir / f"{name}.csv", index=False)
+    results_dir = paths.results("benchmark")
+    figures_dir = paths.figures("benchmark")
+    _save_tables(results_dir, tables)
 
     figures = [
         viz.selection_love_plot(balance_display, figures_dir / "selection_imbalance.png"),
@@ -516,7 +519,7 @@ def run_benchmark_construction_report(paths: DataPaths | None = None) -> Benchma
     report_path = results_dir / "benchmark_construction_report.md"
     report_path.write_text(_benchmark_markdown(spec, tables, env))
     write_provenance(results_dir, paths, spec)
-    return BenchmarkOutputs(tables, figures, report_path)
+    return ReportOutputs(tables, figures, report_path)
 
 
 PROPENSITY_ESTIMATORS = ["naive_difference", "oracle_ipw", "ipw_ate", "ipw_att", "matching_nn"]
@@ -615,9 +618,7 @@ def _propensity_markdown(spec: dict, summary: pd.DataFrame, diagnostics: pd.Data
     return "\n".join(lines)
 
 
-def run_propensity_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
-    from causeway.benchmark import experimental_benchmarks, monte_carlo_summary
-    from causeway.config import load_benchmark_config
+def run_propensity_report(paths: DataPaths | None = None) -> ReportOutputs:
     from causeway.evaluation import (
         iter_samples,
         propensity_methods,
@@ -638,14 +639,7 @@ def run_propensity_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
     summary = monte_carlo_summary(study.estimates, benchmarks)
     diagnostics = _diagnostic_summary(study.diagnostics)
 
-    targets = benchmarks.rename(columns={"estimand": "benchmark", "value": "benchmark_value"})
-    relative = study.estimates.merge(
-        targets[["comparison", "scenario", "outcome", "benchmark", "benchmark_value"]],
-        on=["comparison", "scenario", "outcome", "benchmark"],
-    )
-    relative["relative_error"] = (relative["estimate"] - relative["benchmark_value"]) / relative[
-        "benchmark_value"
-    ]
+    relative = _relative_errors(study.estimates, benchmarks)
 
     caliper = next(e for e in spec["estimators"] if e["name"] == "matching_nn")["matching"][
         "caliper_sd_of_logit"
@@ -701,11 +695,9 @@ def run_propensity_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
         "diagnostics": study.diagnostics,
         "display_balance": pd.DataFrame(balance_rows),
     }
-    results_dir = paths.root / "reports" / "results" / "propensity"
-    figures_dir = paths.root / "reports" / "figures" / "propensity"
-    results_dir.mkdir(parents=True, exist_ok=True)
-    for name, table in tables.items():
-        table.to_csv(results_dir / f"{name}.csv", index=False)
+    results_dir = paths.results("propensity")
+    figures_dir = paths.figures("propensity")
+    _save_tables(results_dir, tables)
     figures = [
         viz.estimated_propensity_overlap(overlap_panels, figures_dir / "estimated_propensity_overlap.png"),
         viz.adjustment_love_plot(
@@ -722,7 +714,7 @@ def run_propensity_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
     report_path = results_dir / "propensity_report.md"
     report_path.write_text(_propensity_markdown(spec, summary, diagnostics, environment()))
     write_provenance(results_dir, paths, spec)
-    return BenchmarkOutputs(tables, figures, report_path)
+    return ReportOutputs(tables, figures, report_path)
 
 
 ESTIMATION_ESTIMATORS = ["naive_difference", "oracle_ipw", "outcome_regression", "aipw", "dml_irm"]
@@ -816,9 +808,7 @@ def _estimation_markdown(
     return "\n".join(lines)
 
 
-def run_estimation_report(paths: DataPaths | None = None, n_jobs: int = 8) -> BenchmarkOutputs:
-    from causeway.benchmark import experimental_benchmarks, monte_carlo_summary
-    from causeway.config import load_benchmark_config
+def run_estimation_report(paths: DataPaths | None = None, n_jobs: int = 8) -> ReportOutputs:
     from causeway.evaluation import (
         cross_check_methods,
         dml_methods,
@@ -864,14 +854,7 @@ def run_estimation_report(paths: DataPaths | None = None, n_jobs: int = 8) -> Be
         ]
     )
 
-    targets = benchmarks.rename(columns={"estimand": "benchmark", "value": "benchmark_value"})
-    relative = study.estimates.merge(
-        targets[["comparison", "scenario", "outcome", "benchmark", "benchmark_value"]],
-        on=["comparison", "scenario", "outcome", "benchmark"],
-    )
-    relative["relative_error"] = (relative["estimate"] - relative["benchmark_value"]) / relative[
-        "benchmark_value"
-    ]
+    relative = _relative_errors(study.estimates, benchmarks)
 
     tables = {
         "monte_carlo_summary": summary,
@@ -880,11 +863,9 @@ def run_estimation_report(paths: DataPaths | None = None, n_jobs: int = 8) -> Be
         "estimates": study.estimates,
         "diagnostics": study.diagnostics,
     }
-    results_dir = paths.root / "reports" / "results" / "estimation"
-    figures_dir = paths.root / "reports" / "figures" / "estimation"
-    results_dir.mkdir(parents=True, exist_ok=True)
-    for name, table in tables.items():
-        table.to_csv(results_dir / f"{name}.csv", index=False)
+    results_dir = paths.results("estimation")
+    figures_dir = paths.figures("estimation")
+    _save_tables(results_dir, tables)
     figures = [
         viz.estimator_error_grid(
             relative, "spend", figures_dir / "estimator_error_spend.png", ESTIMATION_ESTIMATORS
@@ -896,7 +877,7 @@ def run_estimation_report(paths: DataPaths | None = None, n_jobs: int = 8) -> Be
     report_path = results_dir / "estimation_report.md"
     report_path.write_text(_estimation_markdown(spec, summary, nuisance, checks, environment()))
     write_provenance(results_dir, paths, spec)
-    return BenchmarkOutputs(tables, figures, report_path)
+    return ReportOutputs(tables, figures, report_path)
 
 
 COMPARISON_ESTIMATORS = [
@@ -909,10 +890,6 @@ COMPARISON_ESTIMATORS = [
     "ipw_att",
     "matching_nn",
 ]
-
-
-def _fmt_effect(value: float, outcome: str) -> str:
-    return f"{value:.3f}" if outcome == "spend" else f"{value * 100:.2f} pp"
 
 
 def _comparison_markdown(inputs: dict, display: pd.DataFrame, performance: pd.DataFrame) -> str:
@@ -1003,7 +980,7 @@ def _comparison_markdown(inputs: dict, display: pd.DataFrame, performance: pd.Da
     return "\n".join(lines)
 
 
-def run_comparison_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
+def run_comparison_report(paths: DataPaths | None = None) -> ReportOutputs:
     from causeway.comparison import display_table, load_comparison_inputs, performance_table
 
     paths = paths or DataPaths()
@@ -1011,21 +988,12 @@ def run_comparison_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
     draw = inputs["spec"]["randomness"]["fixed_display_draw"]
     display = display_table(inputs["estimates"], inputs["benchmarks"], inputs["experiment_effects"], draw)
     performance = performance_table(inputs["estimates"], inputs["benchmarks"])
-    targets = inputs["benchmarks"].rename(columns={"estimand": "benchmark", "value": "benchmark_value"})
-    relative = inputs["estimates"].merge(
-        targets[["comparison", "scenario", "outcome", "benchmark", "benchmark_value"]],
-        on=["comparison", "scenario", "outcome", "benchmark"],
-    )
-    relative["relative_error"] = (relative["estimate"] - relative["benchmark_value"]) / relative[
-        "benchmark_value"
-    ]
+    relative = _relative_errors(inputs["estimates"], inputs["benchmarks"])
 
-    results_dir = paths.root / "reports" / "results" / "comparison"
-    figures_dir = paths.root / "reports" / "figures" / "comparison"
-    results_dir.mkdir(parents=True, exist_ok=True)
+    results_dir = paths.results("comparison")
+    figures_dir = paths.figures("comparison")
     tables = {"display_draw": display, "performance": performance}
-    for name, table in tables.items():
-        table.to_csv(results_dir / f"{name}.csv", index=False)
+    _save_tables(results_dir, tables)
     figures = []
     for outcome in ("spend", "visit"):
         figures += [
@@ -1043,7 +1011,7 @@ def run_comparison_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
     report_path = results_dir / "comparison_report.md"
     report_path.write_text(_comparison_markdown(inputs, display, performance))
     write_provenance(results_dir, paths, inputs["spec"])
-    return BenchmarkOutputs(tables, figures, report_path)
+    return ReportOutputs(tables, figures, report_path)
 
 
 def _heterogeneity_markdown(
@@ -1184,7 +1152,7 @@ def _heterogeneity_markdown(
     return "\n".join(lines)
 
 
-def run_heterogeneity_report(paths: DataPaths | None = None, n_jobs: int = 8) -> BenchmarkOutputs:
+def run_heterogeneity_report(paths: DataPaths | None = None, n_jobs: int = 8) -> ReportOutputs:
     """Compute every heterogeneity and targeting table, save it, then render figures and the report."""
     from joblib import Parallel, delayed
 
@@ -1311,8 +1279,7 @@ def run_heterogeneity_report(paths: DataPaths | None = None, n_jobs: int = 8) ->
         )
     curves = pd.concat(curves, ignore_index=True)
 
-    results_dir = paths.root / "reports" / "results" / "heterogeneity"
-    results_dir.mkdir(parents=True, exist_ok=True)
+    results_dir = paths.results("heterogeneity")
     tables = {
         "blp_gates_clan": gates,
         "verdicts": verdicts,
@@ -1324,8 +1291,7 @@ def run_heterogeneity_report(paths: DataPaths | None = None, n_jobs: int = 8) ->
         "policy_differences": pd.concat([d for _, d in policy_tables.values()], ignore_index=True),
         "forest_cate": pd.concat(cate_rows, ignore_index=True),
     }
-    for name, table in tables.items():
-        table.to_csv(results_dir / f"{name}.csv", index=False)
+    _save_tables(results_dir, tables)
     return render_heterogeneity_report(paths)
 
 
@@ -1342,14 +1308,14 @@ HETEROGENEITY_TABLES = [
 ]
 
 
-def render_heterogeneity_report(paths: DataPaths | None = None) -> BenchmarkOutputs:
+def render_heterogeneity_report(paths: DataPaths | None = None) -> ReportOutputs:
     """Figures and report from the saved heterogeneity tables (no recomputation)."""
     from causeway.heterogeneity import load_heterogeneity_plan
 
     paths = paths or DataPaths()
     plan = load_heterogeneity_plan()
-    results_dir = paths.root / "reports" / "results" / "heterogeneity"
-    figures_dir = paths.root / "reports" / "figures" / "heterogeneity"
+    results_dir = paths.results("heterogeneity")
+    figures_dir = paths.figures("heterogeneity")
     tables = {name: pd.read_csv(results_dir / f"{name}.csv") for name in HETEROGENEITY_TABLES}
     gates, verdicts, levels = tables["blp_gates_clan"], tables["verdicts"], tables["segment_levels"]
     b1 = gates[gates["parameter"] == "b1"]
@@ -1397,4 +1363,332 @@ def render_heterogeneity_report(paths: DataPaths | None = None) -> BenchmarkOutp
         )
     )
     write_provenance(results_dir, paths, heterogeneity_plan_version=plan["meta"]["version"])
-    return BenchmarkOutputs(tables, figures, report_path)
+    return ReportOutputs(tables, figures, report_path)
+
+
+ROBUSTNESS_TABLES = [
+    "experiment_robustness",
+    "bootstrap_stability",
+    "specification_estimates",
+    "refutation_estimates",
+    "sensitivity",
+    "benchmarks",
+]
+
+
+def compute_robustness_tables(paths: DataPaths | None = None, n_jobs: int = 8) -> dict[str, pd.DataFrame]:
+    """Run every robustness and sensitivity check in configs/robustness.toml and save the tables."""
+    from causeway import evaluation as ev
+    from causeway.robustness import bootstrap_stability, experiment_robustness, load_robustness_plan
+
+    paths = paths or DataPaths()
+    plan = load_robustness_plan()
+    spec = load_benchmark_config(1)
+    frame = load_processed(paths)
+    results_dir = paths.results("robustness")
+
+    tables = {
+        "experiment_robustness": experiment_robustness(frame),
+        "bootstrap_stability": bootstrap_stability(frame, plan),
+    }
+    specifications = ev.run_estimator_study(
+        frame,
+        [
+            ev.propensity_specification_methods,
+            ev.outcome_specification_methods,
+            ev.trimming_methods,
+            ev.caliper_methods,
+        ],
+        spec,
+        scenarios=plan["benchmark"]["scenarios"],
+        n_draws=plan["benchmark"]["n_draws"],
+        n_jobs=n_jobs,
+    )
+    benchmarks = pd.concat(
+        [experimental_benchmarks(p, spec) for p in specifications.pairs.values()], ignore_index=True
+    )
+    tables["specification_estimates"] = specifications.estimates
+    tables["refutation_estimates"] = ev.run_estimator_study(
+        frame,
+        [ev.refutation_methods],
+        spec,
+        scenarios=plan["benchmark"]["scenarios"],
+        n_draws=plan["refutation"]["n_draws"],
+        n_jobs=n_jobs,
+    ).estimates
+    tables["sensitivity"] = ev.run_estimator_study(
+        frame,
+        [ev.sensitivity_methods],
+        spec,
+        scenarios=["A", "C"],
+        n_draws=plan["benchmark"]["n_draws"],
+        n_jobs=n_jobs,
+    ).diagnostics
+    tables["benchmarks"] = benchmarks
+    _save_tables(results_dir, tables)
+    return tables
+
+
+def _refutation_summary(estimates: pd.DataFrame, benchmarks: pd.DataFrame) -> pd.DataFrame:
+    keys = ["comparison", "scenario", "outcome", "estimator", "draw"]
+    wide = estimates.pivot_table(index=keys, columns="specification", values="estimate").reset_index()
+    excludes_zero = (
+        estimates.assign(excludes=(estimates["ci_low"] > 0) | (estimates["ci_high"] < 0))
+        .query("specification == 'placebo'")
+        .set_index(keys)["excludes"]
+    )
+    wide = wide.join(excludes_zero.rename("placebo_excludes_zero"), on=keys)
+    ate = benchmarks[benchmarks["estimand"] == "ATE"].set_index(["comparison", "scenario", "outcome"])[
+        "value"
+    ]
+    wide["benchmark"] = [
+        ate.loc[(c, s, o)]
+        for c, s, o in zip(wide["comparison"], wide["scenario"], wide["outcome"], strict=True)
+    ]
+    rows = []
+    for key, group in wide.groupby(["comparison", "scenario", "outcome", "estimator"], sort=False):
+        scale = abs(group["benchmark"].iloc[0])
+        rows.append(
+            {
+                **dict(zip(["comparison", "scenario", "outcome", "estimator"], key, strict=True)),
+                "n_draws": len(group),
+                "original_bias_pct": (group["original"] - group["benchmark"]).mean() / scale,
+                "placebo_mean": group["placebo"].mean(),
+                "placebo_rejection_rate": group["placebo_excludes_zero"].mean(),
+                "random_cause_mean_abs_change_pct": (group["random_common_cause"] - group["original"])
+                .abs()
+                .mean()
+                / scale,
+                "subset_mean_change_pct": (group["subset_80"] - group["original"]).mean() / scale,
+                "subset_sd_change_pct": (group["subset_80"] - group["original"]).std(ddof=1) / scale,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _sensitivity_summary(sensitivity: pd.DataFrame, benchmarks: pd.DataFrame) -> pd.DataFrame:
+    from causeway.sensitivity import bias_bound
+
+    ate = benchmarks[benchmarks["estimand"] == "ATE"].set_index(["comparison", "scenario", "outcome"])[
+        "value"
+    ]
+    rows = []
+    for (comparison, scenario), group in sensitivity.groupby(["comparison", "scenario"], sort=False):
+        row = {
+            "comparison": comparison,
+            "scenario": scenario,
+            "n_draws": len(group),
+            "visit_e_value": group["visit_e_value"].median(),
+            "visit_rosenbaum_gamma": group["visit_rosenbaum_gamma"].median(),
+        }
+        for outcome in ("spend", "visit"):
+            error = (group[f"{outcome}_estimate"] - ate.loc[(comparison, scenario, outcome)]).abs()
+            row[f"{outcome}_rv_q1"] = group[f"{outcome}_rv_q1"].median()
+            row[f"{outcome}_rv_q1_alpha05"] = group[f"{outcome}_rv_q1_alpha05"].median()
+            row[f"{outcome}_abs_error"] = error.median()
+            for k in (1, 2, 3):
+                row[f"{outcome}_bound_k{k}_covers_error"] = (
+                    group[f"{outcome}_max_bias_bound_k{k}"] >= error
+                ).mean()
+            hidden = f"{outcome}_hidden_recency_r2_yz"
+            if hidden in group and group[hidden].notna().any():
+                implied = [
+                    bias_bound(se, dof, r2y, r2d)
+                    for se, dof, r2y, r2d in zip(
+                        group[f"{outcome}_se"],
+                        group[f"{outcome}_dof"],
+                        group[hidden],
+                        group[f"{outcome}_hidden_recency_r2_dz"],
+                        strict=True,
+                    )
+                ]
+                row[f"{outcome}_hidden_r2_yz"] = group[hidden].median()
+                row[f"{outcome}_hidden_r2_dz"] = group[f"{outcome}_hidden_recency_r2_dz"].median()
+                row[f"{outcome}_bias_implied_by_hidden"] = float(np.median(implied))
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def _robustness_markdown(
+    tables: dict[str, pd.DataFrame],
+    summary: pd.DataFrame,
+    refutation: pd.DataFrame,
+    sensitivity: pd.DataFrame,
+) -> str:
+    experiment = tables["experiment_robustness"]
+    lines = [
+        "# Robustness and sensitivity",
+        "",
+        "Plan: `configs/robustness.toml` and the pre-registered `[robustness]` section of "
+        "`configs/benchmark/v1.toml`, both committed before these checks were run.",
+        "",
+        "## 1. Randomized experiment",
+        "",
+        "| Analysis | Contrast | Outcome | Estimate | 95% CI | p |",
+        "|---|---|---|---|---|---|",
+    ]
+    for _, r in experiment.iterrows():
+        lines.append(
+            f"| {r['analysis']} | {viz.CONTRAST_LABELS[r['contrast']]} | {r['outcome']} | "
+            f"{r['estimate']:.4f} "
+            f"| {_fmt_ci(r['ci_low'], r['ci_high'], digits=4)} | {_fmt_p(r['p_value'])} |"
+        )
+    dollars = experiment[
+        (experiment["analysis"] == "spend version") & ~experiment["outcome"].str.startswith("log")
+    ]
+    lines += ["", "Spend effect across the dollar-scale versions:"]
+    for contrast, group in dollars.groupby("contrast", sort=False):
+        lines.append(
+            f"- {viz.CONTRAST_LABELS[contrast]}: ${group['estimate'].min():.3f} to "
+            f"${group['estimate'].max():.3f}; every interval excludes zero: "
+            f"{'yes' if (group['ci_low'] > 0).all() else 'no'}."
+        )
+    stability = tables["bootstrap_stability"]
+    lines += [
+        "",
+        "BCa interval bounds for spend across five further bootstrap seeds:",
+        "",
+        "| Contrast | Lower bound range | Upper bound range |",
+        "|---|---|---|",
+    ]
+    for contrast, group in stability.groupby("contrast", sort=False):
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[contrast]} | {group['ci_low'].min():.3f} to {group['ci_low'].max():.3f} "
+            f"| {group['ci_high'].min():.3f} to {group['ci_high'].max():.3f} |"
+        )
+
+    lines += [
+        "",
+        "## 2. Benchmark estimators under other model specifications, trimming and calipers",
+        "",
+        "| Comparison | Scenario | Outcome | Estimator | Specification | Estimand | Bias % (±2 MC SE) "
+        "| Unbiased within MC error | RMSE % | Coverage |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for _, s in summary.iterrows():
+        scale = abs(s["benchmark_value"])
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[s['comparison']]} | {s['scenario']} | {s['outcome']} "
+            f"| {viz.ESTIMATOR_DISPLAY[s['estimator']]} | {s['specification']} | {s['estimand']} "
+            f"| {s['bias'] / scale:+.1%} (±{2 * s['bias_mc_se'] / scale:.1%}) "
+            f"| {'yes' if abs(s['bias']) <= 2 * s['bias_mc_se'] else 'no'} | {s['rmse'] / scale:.0%} "
+            f"| {_num(s['coverage'], '.3f')} |"
+        )
+
+    lines += [
+        "",
+        "## 3. Refutation tests (first 50 draws)",
+        "",
+        "A placebo refits every model on a permuted treatment, so its estimate should be near zero and its "
+        "interval should exclude zero about 5% of the time. Adding a random covariate and re-estimating on "
+        "80% of the data should barely move the estimate. None of these checks can detect an unobserved "
+        "confounder: they test the estimator, not the assumption.",
+        "",
+        "| Comparison | Scenario | Outcome | Estimator | Bias vs benchmark | Placebo mean | Placebo CI "
+        "excludes 0 | Random covariate: mean abs change | 80% subset: mean change (SD) |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    for _, r in refutation.iterrows():
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[r['comparison']]} | {r['scenario']} | {r['outcome']} "
+            f"| {viz.ESTIMATOR_DISPLAY[r['estimator']]} | {r['original_bias_pct']:+.1%} | "
+            f"{r['placebo_mean']:+.4f} "
+            f"| {r['placebo_rejection_rate']:.0%} | {r['random_cause_mean_abs_change_pct']:.2%} "
+            f"| {r['subset_mean_change_pct']:+.1%} ({r['subset_sd_change_pct']:.1%}) |"
+        )
+    for (comparison, outcome), group in refutation[refutation["estimator"] == "aipw"].groupby(
+        ["comparison", "outcome"], sort=False
+    ):
+        a, c = group.set_index("scenario").loc["A"], group.set_index("scenario").loc["C"]
+        lines.append(
+            f"\n{viz.CONTRAST_LABELS[comparison]}, {outcome}, AIPW: the placebo rejects in "
+            f"{a['placebo_rejection_rate']:.0%} "
+            f"of draws in Scenario A and {c['placebo_rejection_rate']:.0%} in Scenario C, while the bias is "
+            f"{a['original_bias_pct']:+.1%} in A and {c['original_bias_pct']:+.1%} in C."
+        )
+
+    lines += [
+        "",
+        "## 4. Sensitivity to unobserved confounding (200 draws, Scenarios A and C)",
+        "",
+        "| Comparison | Scenario | Spend RV (q=1) | Spend RV (α=0.05) | Visit RV (q=1) | Visit E-value "
+        "| Rosenbaum Γ* (visit) |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for _, r in sensitivity.iterrows():
+        lines.append(
+            f"| {viz.CONTRAST_LABELS[r['comparison']]} | {r['scenario']} | {r['spend_rv_q1']:.3f} "
+            f"| {r['spend_rv_q1_alpha05']:.3f} | {r['visit_rv_q1']:.3f} | {r['visit_e_value']:.2f} "
+            f"| {_num(r['visit_rosenbaum_gamma'], '.2f')} |"
+        )
+    lines += [
+        "",
+        "Medians over draws. Γ* is the largest hidden bias at which the matched visit comparison "
+        "still rejects; NaN would mean it does not reject even without hidden bias.",
+        "",
+        "**Truth check (Scenario C).** The hidden recency's actual partial R² values, the bias they imply "
+        "under the omitted-variable formula, and whether bounds from observed covariates would have "
+        "covered the actual error:",
+        "",
+        "| Comparison | Outcome | Hidden R²(Y) | Hidden R²(D) | Bias implied by hidden | Actual abs error "
+        "| Bound covers error: 1x / 2x / 3x strongest covariate |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for _, r in sensitivity[sensitivity["scenario"] == "C"].iterrows():
+        for outcome in ("spend", "visit"):
+            lines.append(
+                f"| {viz.CONTRAST_LABELS[r['comparison']]} | {outcome} | {r[f'{outcome}_hidden_r2_yz']:.4f} "
+                f"| {r[f'{outcome}_hidden_r2_dz']:.4f} | {r[f'{outcome}_bias_implied_by_hidden']:.4f} "
+                f"| {r[f'{outcome}_abs_error']:.4f} | "
+                + " / ".join(f"{r[f'{outcome}_bound_k{k}_covers_error']:.0%}" for k in (1, 2, 3))
+                + " |"
+            )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_robustness_report(paths: DataPaths | None = None) -> ReportOutputs:
+    """Figures and report from the saved robustness tables."""
+    paths = paths or DataPaths()
+    results_dir = paths.results("robustness")
+    figures_dir = paths.figures("robustness")
+    tables = {name: pd.read_csv(results_dir / f"{name}.csv") for name in ROBUSTNESS_TABLES}
+    estimates = tables["specification_estimates"]
+    discarded = (
+        estimates[estimates["specification"].str.startswith("caliper")]
+        .groupby(["comparison", "scenario", "outcome", "specification"])["share_treated_discarded"]
+        .mean()
+        .rename("mean_share_treated_discarded")
+        .reset_index()
+    )
+    summary = monte_carlo_summary(estimates, tables["benchmarks"]).merge(
+        discarded, how="left", on=["comparison", "scenario", "outcome", "specification"]
+    )
+    refutation = _refutation_summary(tables["refutation_estimates"], tables["benchmarks"])
+    sensitivity = _sensitivity_summary(tables["sensitivity"], tables["benchmarks"])
+    _save_tables(
+        results_dir,
+        {
+            "specification_summary": summary,
+            "refutation_summary": refutation,
+            "sensitivity_summary": sensitivity,
+        },
+    )
+    figures = [
+        viz.experiment_robustness_plot(
+            tables["experiment_robustness"], figures_dir / "experiment_robustness.png"
+        ),
+        viz.specification_bias(summary, "spend", figures_dir / "specification_bias_spend.png"),
+        viz.specification_bias(summary, "visit", figures_dir / "specification_bias_visit.png"),
+        viz.trimming_and_calipers(summary, figures_dir / "trimming_and_calipers.png"),
+        viz.sensitivity_summary(tables["sensitivity"], figures_dir / "sensitivity_summary.png"),
+    ]
+    report_path = results_dir / "robustness_report.md"
+    report_path.write_text(_robustness_markdown(tables, summary, refutation, sensitivity))
+    write_provenance(results_dir, paths, load_benchmark_config(1))
+    return ReportOutputs(tables, figures, report_path)
+
+
+def run_robustness_report(paths: DataPaths | None = None, n_jobs: int = 8) -> ReportOutputs:
+    compute_robustness_tables(paths, n_jobs)
+    return render_robustness_report(paths)

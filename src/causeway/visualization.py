@@ -38,6 +38,11 @@ ESTIMATOR_LABELS = {
     "bootstrap_bca": "Bootstrap BCa",
     "bootstrap_percentile": "Bootstrap percentile",
 }
+EFFECT_AXIS = {
+    "spend": "Effect on spend ($ per customer)",
+    "visit": "Effect on visit rate (percentage points)",
+    "conversion": "Effect on conversion rate (percentage points)",
+}
 OUTCOME_AXIS = {
     "spend": ("Mean two-week spend ($)", 1.0, "${:.2f}"),
     "visit": ("Visit rate (percentage points)", 100.0, "{:.1f}"),
@@ -82,6 +87,10 @@ def save(fig: plt.Figure, path: Path) -> Path:
     return path
 
 
+def _title(fig: plt.Figure, text: str) -> None:
+    fig.suptitle(text, x=0.0, ha="left", fontweight="bold", fontsize=10)
+
+
 def _footnote(fig: plt.Figure, text: str) -> None:
     fig.text(0.0, -0.02, text, ha="left", va="top", fontsize=7.5, color=INK_MUTED, wrap=True)
 
@@ -112,13 +121,7 @@ def outcome_levels(frame: pd.DataFrame, path: Path, ci_level: float = 0.95) -> P
         ax.grid(axis="y", visible=False)
         ax.set_xlabel(label if outcome == "spend" else label.replace(" (percentage points)", " (%)"))
         ax.margins(x=0.25)
-    fig.suptitle(
-        "Outcome levels by randomized arm (mean with 95% CI)",
-        x=0.0,
-        ha="left",
-        fontweight="bold",
-        fontsize=10,
-    )
+    _title(fig, "Outcome levels by randomized arm (mean with 95% CI)")
     counts = frame["segment"].astype(str).value_counts()
     _footnote(
         fig,
@@ -223,7 +226,7 @@ def effect_forest(effects: pd.DataFrame, path: Path, estimators: list[str]) -> P
     rows = [(c, e) for c in contrasts for e in estimators]
     fig, axes = plt.subplots(1, 3, figsize=(11, 0.3 * len(rows) + 1.6), sharey=True)
     for ax, outcome in zip(axes, outcomes, strict=True):
-        label, scale, _ = OUTCOME_AXIS[outcome]
+        scale = OUTCOME_AXIS[outcome][1]
         ax.axvline(0, color=AXIS, lw=1)
         for i, (contrast, estimator) in enumerate(rows):
             row = effects[
@@ -240,11 +243,7 @@ def effect_forest(effects: pd.DataFrame, path: Path, estimators: list[str]) -> P
                 solid_capstyle="round",
             )
             ax.plot(row["estimate"] * scale, i, "o", color=color, ms=6, mec=SURFACE, mew=1)
-        ax.set_xlabel(
-            label.replace("Mean two-week spend ($)", "Effect on two-week spend ($ per customer)").replace(
-                " rate (percentage points)", " effect (percentage points)"
-            )
-        )
+        ax.set_xlabel(EFFECT_AXIS[outcome])
         ax.grid(axis="y", visible=False)
         ax.set_title(outcome.capitalize() + (" (primary)" if outcome == "spend" else " (secondary)"))
     axes[0].set_yticks(
@@ -254,13 +253,7 @@ def effect_forest(effects: pd.DataFrame, path: Path, estimators: list[str]) -> P
     for boundary in range(len(estimators), len(rows), len(estimators)):
         for ax in axes:
             ax.axhline(boundary - 0.5, color=GRID, lw=0.8)
-    fig.suptitle(
-        "Intention-to-treat effect of assignment to an e-mail campaign (point estimate, 95% CI)",
-        x=0.0,
-        ha="left",
-        fontweight="bold",
-        fontsize=10,
-    )
+    _title(fig, "Intention-to-treat effect of assignment to an e-mail campaign (point estimate, 95% CI)")
     _footnote(
         fig,
         "Estimand: effect of assignment, not of receiving or opening an e-mail. Co-primary: Mens and "
@@ -301,13 +294,7 @@ def bootstrap_distributions(
         ax.grid(axis="x", visible=False)
     np.atleast_1d(axes)[0].set_ylabel("Density")
     np.atleast_1d(axes)[0].legend(loc="upper left", fontsize=7)
-    fig.suptitle(
-        "Bootstrap distributions of the spend effect (5,000 resamples within arms)",
-        x=0.0,
-        ha="left",
-        fontweight="bold",
-        fontsize=10,
-    )
+    _title(fig, "Bootstrap distributions of the spend effect (5,000 resamples within arms)")
     _footnote(fig, "Solid vertical lines: 95% normal-theory interval. Dotted: 95% BCa bootstrap interval.")
     fig.tight_layout()
     return save(fig, path)
@@ -353,13 +340,7 @@ def selection_love_plot(balance: pd.DataFrame, path: Path, threshold: float = 0.
     first.set_yticks(range(len(covariates)), [COVARIATE_LABELS.get(c, c) for c in covariates])
     first.invert_yaxis()
     handles, labels = first.get_legend_handles_labels()
-    fig.suptitle(
-        "Covariate imbalance created by the constructed selection (display draw 0)",
-        x=0.0,
-        ha="left",
-        fontweight="bold",
-        fontsize=10,
-    )
+    _title(fig, "Covariate imbalance created by the constructed selection (display draw 0)")
     fig.legend(handles, labels, loc="upper left", bbox_to_anchor=(0.0, 0.95), ncol=3, fontsize=7.5)
     _footnote(
         fig,
@@ -389,13 +370,7 @@ def design_propensity_overlap(panels: list[dict], path: Path) -> Path:
         ax.set_xlabel("True design propensity e*(x)")
     for ax in axes[:, 0]:
         ax.set_ylabel("Retained customers")
-    fig.suptitle(
-        "Overlap of the design propensity in the retained sample (display draw 0)",
-        x=0.0,
-        ha="left",
-        fontweight="bold",
-        fontsize=10,
-    )
+    _title(fig, "Overlap of the design propensity in the retained sample (display draw 0)")
     _footnote(
         fig,
         "e*(x) is the propensity fixed by the benchmark design, known only because the selection was "
@@ -508,13 +483,7 @@ def estimated_propensity_overlap(panels: list[dict], path: Path) -> Path:
         ax.set_xlabel("Estimated propensity score (logistic model)")
     for ax in axes[:, 0]:
         ax.set_ylabel("Retained customers")
-    fig.suptitle(
-        "Estimated propensity overlap in the retained sample (display draw 0)",
-        x=0.0,
-        ha="left",
-        fontweight="bold",
-        fontsize=10,
-    )
+    _title(fig, "Estimated propensity overlap in the retained sample (display draw 0)")
     _footnote(
         fig, "Scenario C's model omits recency, so its scores understate how separated the arms really are."
     )
@@ -557,13 +526,7 @@ def adjustment_love_plot(balance: pd.DataFrame, path: Path, threshold: float = 0
     for ax in axes[:, 0]:
         ax.tick_params(axis="y", labelsize=7.5)
     handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.suptitle(
-        "Covariate balance before and after propensity adjustment (display draw 0)",
-        x=0.0,
-        ha="left",
-        fontweight="bold",
-        fontsize=10,
-    )
+    _title(fig, "Covariate balance before and after propensity adjustment (display draw 0)")
     fig.legend(handles, labels, loc="upper left", bbox_to_anchor=(0.0, 0.955), ncol=3, fontsize=7.5)
     _footnote(
         fig,
@@ -604,9 +567,7 @@ def weight_distributions(panels: list[dict], path: Path) -> Path:
         ax.grid(axis="x", visible=False)
         ax.legend(loc="upper right", fontsize=6.5)
     np.atleast_1d(axes)[0].set_ylabel("Retained customers")
-    fig.suptitle(
-        "Inverse probability weights (display draw 0)", x=0.0, ha="left", fontweight="bold", fontsize=10
-    )
+    _title(fig, "Inverse probability weights (display draw 0)")
     _footnote(
         fig,
         "ESS: Kish effective sample size as a share of the arm's retained customers. No weights were "
@@ -659,13 +620,10 @@ def estimator_error_grid(relative: pd.DataFrame, outcome: str, path: Path, estim
         fontsize=7.5,
     )
     axes[0].set_ylim(len(rows) - 0.5, -0.5)
-    fig.suptitle(
+    _title(
+        fig,
         f"{outcome.capitalize()}: estimator error across 200 constructed samples (median, 2.5-97.5 "
         "percentiles)",
-        x=0.0,
-        ha="left",
-        fontweight="bold",
-        fontsize=10,
     )
     by_benchmark: dict[str, list[str]] = {}
     for estimator in estimators:
@@ -705,7 +663,7 @@ def comparison_forest(table: pd.DataFrame, outcome: str, path: Path) -> Path:
     comparisons = list(dict.fromkeys(table["comparison"]))
     scenarios = ["A", "B", "C"]
     rows = [(group, name) for group, names in COMPARISON_GROUPS.items() for name in names]
-    label, scale, _ = OUTCOME_AXIS[outcome]
+    scale = OUTCOME_AXIS[outcome][1]
     fig, axes = plt.subplots(
         len(comparisons), 3, figsize=(11.5, 0.27 * len(rows) * len(comparisons) + 2.2), sharey=True
     )
@@ -760,21 +718,13 @@ def comparison_forest(table: pd.DataFrame, outcome: str, path: Path) -> Path:
             ax.grid(axis="y", visible=False)
             ax.set_title(f"{CONTRAST_LABELS[comparison]} · Scenario {scenario}", fontsize=8.5)
             if r == len(comparisons) - 1:
-                ax.set_xlabel(
-                    label.replace("Mean two-week spend ($)", "Effect on spend ($ per customer)").replace(
-                        " rate (percentage points)", " effect (percentage points)"
-                    )
-                )
+                ax.set_xlabel(EFFECT_AXIS[outcome])
     labels = [EXPERIMENT_LABELS.get(name, ESTIMATOR_DISPLAY.get(name, name)) for _, name in rows]
     for ax in axes[:, 0]:
         ax.set_yticks(range(len(rows)), labels, fontsize=7.5)
         ax.set_ylim(len(rows) - 0.5, -0.5)
-    fig.suptitle(
-        f"{outcome.capitalize()}: estimates from one constructed observational dataset (display draw 0)",
-        x=0.0,
-        ha="left",
-        fontweight="bold",
-        fontsize=10,
+    _title(
+        fig, f"{outcome.capitalize()}: estimates from one constructed observational dataset (display draw 0)"
     )
     _footnote(
         fig,
@@ -825,13 +775,7 @@ def bias_rmse_summary(performance: pd.DataFrame, outcome: str, path: Path, estim
         fontsize=7.5,
     )
     axes[0].set_ylim(len(rows) - 0.5, -0.5)
-    fig.suptitle(
-        f"{outcome.capitalize()}: bias (dot, ±2 Monte Carlo SE) and RMSE (bar) across 200 draws",
-        x=0.0,
-        ha="left",
-        fontweight="bold",
-        fontsize=10,
-    )
+    _title(fig, f"{outcome.capitalize()}: bias (dot, ±2 Monte Carlo SE) and RMSE (bar) across 200 draws")
     _footnote(
         fig,
         "Red: bias larger than twice its Monte Carlo standard error. Grey bar: RMSE, which adds the "
@@ -853,7 +797,7 @@ def gates_plot(gates: pd.DataFrame, verdicts: pd.DataFrame, path: Path) -> Path:
         len(outcomes), len(contrasts), figsize=(10, 2.5 * len(outcomes) + 1), squeeze=False
     )
     for r, outcome in enumerate(outcomes):
-        label, scale, _ = OUTCOME_AXIS[outcome]
+        scale = OUTCOME_AXIS[outcome][1]
         for c, contrast in enumerate(contrasts):
             ax = axes[r, c]
             sub = gates[(gates["outcome"] == outcome) & (gates["contrast"] == contrast)].set_index(
@@ -882,18 +826,8 @@ def gates_plot(gates: pd.DataFrame, verdicts: pd.DataFrame, path: Path) -> Path:
             ax.set_xticks(range(1, 6), ["Q1\nlowest", "Q2", "Q3", "Q4", "Q5\nhighest"])
             ax.grid(axis="x", visible=False)
             if c == 0:
-                ax.set_ylabel(
-                    label.replace("Mean two-week spend ($)", "Effect on spend ($)").replace(
-                        " rate (percentage points)", " effect (pp)"
-                    )
-                )
-    fig.suptitle(
-        "Sorted group average effects (GATES) by quintile of predicted effect, held-out halves",
-        x=0.0,
-        ha="left",
-        fontweight="bold",
-        fontsize=10,
-    )
+                ax.set_ylabel(EFFECT_AXIS[outcome])
+    _title(fig, "Sorted group average effects (GATES) by quintile of predicted effect, held-out halves")
     _footnote(
         fig,
         "Medians over 100 random splits; intervals have at least 95% coverage. Grey band: the average "
@@ -910,7 +844,7 @@ def segment_forest(levels: pd.DataFrame, overall: dict[str, float], outcome: str
     contrasts = list(dict.fromkeys(levels["contrast"]))
     rows = levels[["variable", "level"]].drop_duplicates().itertuples(index=False)
     rows = list(rows)
-    label, scale, _ = OUTCOME_AXIS[outcome]
+    scale = OUTCOME_AXIS[outcome][1]
     fig, axes = plt.subplots(1, len(contrasts), figsize=(10, 0.24 * len(rows) + 1.8), sharey=True)
     for ax, contrast in zip(np.atleast_1d(axes), contrasts, strict=True):
         sub = levels[(levels["contrast"] == contrast) & (levels["outcome"] == outcome)]
@@ -935,11 +869,7 @@ def segment_forest(levels: pd.DataFrame, overall: dict[str, float], outcome: str
                 markeredgecolor=color,
             )
         ax.set_title(CONTRAST_LABELS[contrast], fontsize=9)
-        ax.set_xlabel(
-            label.replace("Mean two-week spend ($)", "Effect on spend ($)").replace(
-                " rate (percentage points)", " effect (pp)"
-            )
-        )
+        ax.set_xlabel(EFFECT_AXIS[outcome])
         ax.grid(axis="y", visible=False)
         for boundary in range(1, len(rows)):
             if rows[boundary][0] != rows[boundary - 1][0]:
@@ -947,13 +877,7 @@ def segment_forest(levels: pd.DataFrame, overall: dict[str, float], outcome: str
     first = np.atleast_1d(axes)[0]
     first.set_yticks(range(len(rows)), [f"{v}: {lv}" for v, lv in rows], fontsize=7)
     first.set_ylim(len(rows) - 0.5, -0.5)
-    fig.suptitle(
-        f"{outcome.capitalize()}: effect within pre-specified segments (exploratory)",
-        x=0.0,
-        ha="left",
-        fontweight="bold",
-        fontsize=10,
-    )
+    _title(fig, f"{outcome.capitalize()}: effect within pre-specified segments (exploratory)")
     _footnote(
         fig,
         "Filled marker: BH q < 0.05 (benefit); hollow: inconclusive. Dashed line: overall effect. "
@@ -991,13 +915,7 @@ def cate_distribution(panels: list[dict], path: Path) -> Path:
             color=INK_SECONDARY,
         )
     np.atleast_1d(axes)[0].set_ylabel("Customers")
-    fig.suptitle(
-        "Causal forest: predicted individual effects (descriptive)",
-        x=0.0,
-        ha="left",
-        fontweight="bold",
-        fontsize=10,
-    )
+    _title(fig, "Causal forest: predicted individual effects (descriptive)")
     _footnote(
         fig,
         "Spread in point predictions is not evidence of heterogeneity on its own; the formal test (GATES "
@@ -1038,12 +956,230 @@ def uplift_curves(curves: pd.DataFrame, path: Path, outcome: str) -> Path:
     np.atleast_1d(axes)[0].set_ylabel(
         "Incremental " + ("spend per customer ($)" if outcome == "spend" else "visits per customer (pp)")
     )
-    fig.suptitle(f"Held-out uplift curves ({outcome})", x=0.0, ha="left", fontweight="bold", fontsize=10)
+    _title(fig, f"Held-out uplift curves ({outcome})")
     _footnote(
         fig,
         "Estimated policy values from cross-fitted predictions and inverse probability weighting on the "
         "randomized data. These policies were never run. Point estimates; intervals are in the policy "
         "table.",
+    )
+    fig.tight_layout()
+    return save(fig, path)
+
+
+SPECIFICATION_LABELS = {
+    "propensity=main": "main propensity",
+    "propensity=alt_categorical": "categorical propensity",
+    "propensity=alt_gbm": "boosted propensity",
+    "outcome=alt_gbm": "boosted outcome model",
+}
+
+
+def experiment_robustness_plot(table: pd.DataFrame, path: Path) -> Path:
+    """Does the spend effect depend on how the largest purchases or duplicate rows are handled?"""
+    apply_style()
+    dollars = table[~table["outcome"].str.startswith("log") & table["outcome"].str.startswith("spend")]
+    contrasts = list(dict.fromkeys(dollars["contrast"]))
+    labels = list(dict.fromkeys(zip(dollars["analysis"], dollars["outcome"], strict=True)))
+    fig, axes = plt.subplots(1, len(contrasts), figsize=(11, 0.4 * len(labels) + 1.6), sharey=True)
+    for ax, contrast in zip(axes, contrasts, strict=True):
+        sub = dollars[dollars["contrast"] == contrast]
+        primary = sub[(sub["analysis"] == "spend version") & (sub["outcome"] == "spend")].iloc[0]
+        ax.axvline(0, color=AXIS, lw=1)
+        ax.axvline(primary["estimate"], color=INK_SECONDARY, lw=1, ls="--")
+        for i, (analysis, outcome) in enumerate(labels):
+            row = sub[(sub["analysis"] == analysis) & (sub["outcome"] == outcome)].iloc[0]
+            ax.plot(
+                [row["ci_low"], row["ci_high"]],
+                [i, i],
+                color=CONTRAST_COLORS[contrast],
+                lw=2,
+                solid_capstyle="round",
+            )
+            ax.plot(row["estimate"], i, "o", color=CONTRAST_COLORS[contrast], ms=5, mec=SURFACE)
+        ax.set_title(CONTRAST_LABELS[contrast], fontsize=9)
+        ax.set_xlabel("Effect on spend ($ per customer)")
+        ax.grid(axis="y", visible=False)
+    names = [outcome if analysis == "spend version" else f"spend, {analysis}" for analysis, outcome in labels]
+    axes[0].set_yticks(range(len(labels)), names, fontsize=7.5)
+    axes[0].set_ylim(len(labels) - 0.5, -0.5)
+    _title(fig, "Robustness of the experimental spend effect")
+    _footnote(
+        fig,
+        "Dashed line: primary estimate. No version drops customers based on what they spent. "
+        "The log-scale version answers a different question and is in the table only.",
+    )
+    fig.tight_layout()
+    return save(fig, path)
+
+
+def specification_bias(summary: pd.DataFrame, outcome: str, path: Path) -> Path:
+    """Do the Part II conclusions survive other propensity and outcome models?"""
+    apply_style()
+    rows = summary[(summary["outcome"] == outcome) & summary["specification"].isin(SPECIFICATION_LABELS)][
+        ["comparison", "estimator", "specification"]
+    ].drop_duplicates()
+    order = {
+        name: i for i, name in enumerate(["outcome_regression", "ipw_ate", "aipw", "ipw_att", "matching_nn"])
+    }
+    rows = rows.sort_values(
+        ["comparison", "estimator", "specification"],
+        key=lambda col: col.map(order) if col.name == "estimator" else col,
+    )
+    rows = list(rows.itertuples(index=False))
+    fig, axes = plt.subplots(1, 3, figsize=(11, 0.26 * len(rows) + 1.9), sharey=True)
+    for ax, scenario in zip(axes, ["A", "B", "C"], strict=True):
+        ax.axvline(0, color=AXIS, lw=1)
+        for i, (comparison, estimator, specification) in enumerate(rows):
+            row = summary[
+                (summary["comparison"] == comparison)
+                & (summary["scenario"] == scenario)
+                & (summary["outcome"] == outcome)
+                & (summary["estimator"] == estimator)
+                & (summary["specification"] == specification)
+            ].iloc[0]
+            scale = 100 / abs(row["benchmark_value"])
+            ax.barh(i, row["rmse"] * scale, height=0.55, color=GRID, edgecolor=SURFACE)
+            bias, half = row["bias"] * scale, 2 * row["bias_mc_se"] * scale
+            color = INK if abs(row["bias"]) <= 2 * row["bias_mc_se"] else STATUS_CRITICAL
+            ax.plot([bias - half, bias + half], [i, i], color=color, lw=2, solid_capstyle="round")
+            ax.plot(bias, i, "o", color=color, ms=4.5, mec=SURFACE)
+        ax.set_title(
+            {"A": "Scenario A", "B": "Scenario B", "C": "Scenario C (recency hidden)"}[scenario], fontsize=9
+        )
+        ax.set_xlabel("% of matched benchmark")
+        ax.grid(axis="y", visible=False)
+    axes[0].set_yticks(
+        range(len(rows)),
+        [
+            f"{CONTRAST_LABELS[c].split(' vs')[0]} · {ESTIMATOR_DISPLAY[e]} · {SPECIFICATION_LABELS[s]}"
+            for c, e, s in rows
+        ],
+        fontsize=6.8,
+    )
+    axes[0].set_ylim(len(rows) - 0.5, -0.5)
+    _title(
+        fig, f"{outcome.capitalize()}: bias (dot, ±2 Monte Carlo SE) and RMSE (bar) by model specification"
+    )
+    _footnote(fig, "Red: bias larger than twice its Monte Carlo SE. 200 draws per comparison and scenario.")
+    fig.tight_layout()
+    return save(fig, path)
+
+
+def trimming_and_calipers(summary: pd.DataFrame, path: Path, outcome: str = "spend") -> Path:
+    """What do trimming and tighter calipers buy, and what do they cost in discarded customers?"""
+    apply_style()
+    fig, (left, right) = plt.subplots(1, 2, figsize=(11, 3.4))
+    trims = summary[
+        summary["specification"].str.startswith("trim")
+        & (summary["outcome"] == outcome)
+        & (summary["scenario"] == "B")
+    ]
+    bounds = sorted(trims["specification"].unique())
+    for estimator, marker in (("ipw_ate", "o"), ("aipw", "s"), ("dml_irm", "D")):
+        for comparison in dict.fromkeys(trims["comparison"]):
+            sub = (
+                trims[(trims["estimator"] == estimator) & (trims["comparison"] == comparison)]
+                .set_index("specification")
+                .loc[bounds]
+            )
+            left.plot(
+                range(len(bounds)),
+                100 * sub["rmse"] / sub["benchmark_value"].abs(),
+                marker=marker,
+                color=CONTRAST_COLORS[comparison],
+                lw=1.5,
+                label=f"{CONTRAST_LABELS[comparison].split(' vs')[0]} · {ESTIMATOR_DISPLAY[estimator]}",
+            )
+    left.set_xticks(range(len(bounds)), [b.removeprefix("trim=") for b in bounds])
+    left.set_xlabel("Trimming bounds on the estimated propensity")
+    left.set_ylabel("RMSE (% of trimmed benchmark)")
+    left.set_title(f"Scenario B, {outcome}: error against the trimmed-population ATE", fontsize=9)
+    left.legend(fontsize=6.5, loc="upper right")
+    calipers = summary[summary["specification"].str.startswith("caliper") & (summary["outcome"] == outcome)]
+    for comparison in dict.fromkeys(calipers["comparison"]):
+        for scenario, style in (("A", "-"), ("B", "--")):
+            sub = calipers[(calipers["comparison"] == comparison) & (calipers["scenario"] == scenario)]
+            right.plot(
+                100 * sub["mean_share_treated_discarded"],
+                100 * sub["bias"] / sub["benchmark_value"],
+                marker="o",
+                ls=style,
+                color=CONTRAST_COLORS[comparison],
+                label=f"{CONTRAST_LABELS[comparison].split(' vs')[0]} · Scenario {scenario}",
+            )
+            for _, row in sub.iterrows():
+                right.annotate(
+                    row["specification"].removeprefix("caliper="),
+                    (100 * row["mean_share_treated_discarded"], 100 * row["bias"] / row["benchmark_value"]),
+                    xytext=(4, 2),
+                    textcoords="offset points",
+                    fontsize=6.5,
+                    color=INK_SECONDARY,
+                )
+    right.axhline(0, color=AXIS, lw=1)
+    right.set_xlabel("Treated customers left unmatched (%)")
+    right.set_ylabel("Bias (% of ATT benchmark)")
+    right.set_title(f"1:1 matching, {outcome}: caliper (SD of logit) vs bias", fontsize=9)
+    right.legend(fontsize=6.5, loc="best")
+    _title(fig, "Trimming and caliper sensitivity")
+    _footnote(
+        fig,
+        "Trimming changes the estimand to the trimmed population, so each trimmed estimate is compared "
+        "with the experimental ATE over the same population (true e* within the bounds).",
+    )
+    fig.tight_layout()
+    return save(fig, path)
+
+
+def sensitivity_summary(sensitivity: pd.DataFrame, path: Path) -> Path:
+    """Do standard sensitivity summaries look any different when a confounder really is hidden?"""
+    apply_style()
+    panels = [
+        ("visit_rv_q1", "Robustness value, visit (partial R²)"),
+        ("visit_e_value", "E-value, visit risk ratio"),
+        ("visit_rosenbaum_gamma", "Rosenbaum Γ*, matched visit pairs"),
+    ]
+    fig, axes = plt.subplots(1, 3, figsize=(11, 3.0))
+    comparisons = list(dict.fromkeys(sensitivity["comparison"]))
+    for ax, (column, title) in zip(axes, panels, strict=True):
+        for c_index, comparison in enumerate(comparisons):
+            for s_index, scenario in enumerate(["A", "C"]):
+                values = sensitivity[
+                    (sensitivity["comparison"] == comparison) & (sensitivity["scenario"] == scenario)
+                ][column].dropna()
+                if values.empty:  # e.g. Gamma* is undefined when no draw is significant at Gamma = 1
+                    continue
+                position = c_index * 2.5 + s_index
+                low, mid, high = np.percentile(values, [2.5, 50, 97.5])
+                ax.plot(
+                    [position, position],
+                    [low, high],
+                    color=CONTRAST_COLORS[comparison],
+                    lw=2,
+                    solid_capstyle="round",
+                )
+                ax.plot(
+                    position,
+                    mid,
+                    "o" if scenario == "A" else "s",
+                    color=CONTRAST_COLORS[comparison],
+                    ms=6,
+                    mec=SURFACE,
+                )
+                if column == "visit_rv_q1" and scenario == "C":
+                    hidden = sensitivity[
+                        (sensitivity["comparison"] == comparison) & (sensitivity["scenario"] == "C")
+                    ]["visit_hidden_recency_r2_yz"].median()
+                    ax.plot(position, hidden, "x", color=INK, ms=7)
+        ax.set_xticks([0, 1, 2.5, 3.5], ["Mens\nA", "Mens\nC", "Womens\nA", "Womens\nC"], fontsize=7.5)
+        ax.set_title(title, fontsize=9)
+        ax.grid(axis="x", visible=False)
+    _title(fig, "Sensitivity summaries across 200 draws (median, 2.5–97.5 percentiles)")
+    _footnote(
+        fig,
+        "Circles: Scenario A (no hidden confounder). Squares: Scenario C (recency hidden). Cross: the "
+        "hidden recency's actual partial R² with visit.",
     )
     fig.tight_layout()
     return save(fig, path)

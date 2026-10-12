@@ -46,17 +46,13 @@ class Estimate:
     p_value: float | None = None
 
 
-def _z(ci_level: float) -> float:
-    return float(stats.norm.ppf(1 - (1 - ci_level) / 2))
-
-
 def neyman_difference(y_treated: np.ndarray, y_control: np.ndarray, ci_level: float = 0.95) -> Estimate:
     """Difference in means with the Neyman variance (the same as HC2 here)."""
     y_t = np.asarray(y_treated, dtype=float)
     y_c = np.asarray(y_control, dtype=float)
     estimate = y_t.mean() - y_c.mean()
     se = float(np.sqrt(y_t.var(ddof=1) / len(y_t) + y_c.var(ddof=1) / len(y_c)))
-    z = _z(ci_level)
+    z = stats.norm.ppf(1 - (1 - ci_level) / 2)
     p_value = float(2 * stats.norm.sf(abs(estimate) / se)) if se > 0 else float(estimate == 0)
     return Estimate(float(estimate), se, estimate - z * se, estimate + z * se, p_value)
 

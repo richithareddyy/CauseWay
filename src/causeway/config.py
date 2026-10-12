@@ -33,6 +33,12 @@ class DataPaths:
     def reports(self) -> Path:
         return self.root / "reports" / "validation"
 
+    def results(self, name: str) -> Path:
+        return self.root / "reports" / "results" / name
+
+    def figures(self, name: str) -> Path:
+        return self.root / "reports" / "figures" / name
+
 
 @dataclass(frozen=True)
 class Source:

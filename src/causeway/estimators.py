@@ -15,6 +15,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from causeway.experiment import lin_adjusted
+from causeway.weighting import Estimate
 
 
 def cross_fit_folds(n: int, n_folds: int, seed: int) -> list[tuple[np.ndarray, np.ndarray]]:
@@ -25,18 +26,6 @@ def cross_fit_folds(n: int, n_folds: int, seed: int) -> list[tuple[np.ndarray, n
 def linear_propensity_model() -> ClassifierMixin:
     """Unpenalized logistic regression (C = inf); standardization only aids convergence."""
     return make_pipeline(StandardScaler(), LogisticRegression(C=np.inf, max_iter=5000))
-
-
-def linear_outcome_model() -> RegressorMixin:
-    return LinearRegression()
-
-
-@dataclass
-class Estimate:
-    estimate: float
-    se: float
-    ci_low: float
-    ci_high: float
 
 
 def g_computation(y: np.ndarray, treated: np.ndarray, covariates: pd.DataFrame) -> float:
@@ -63,12 +52,13 @@ class CrossFitResult:
     mu1: np.ndarray  # (n, k) out-of-fold predictions
     mu0: np.ndarray
 
-    def estimates(self, ci_level: float = 0.95) -> list[Estimate]:
-        n = self.psi.shape[0]
+    def estimates(self, ci_level: float = 0.95, mask: np.ndarray | None = None) -> list[Estimate]:
+        """One estimate per outcome; `mask` restricts the average to a subset (used for trimming)."""
+        psi = self.psi if mask is None else self.psi[mask]
         z = stats.norm.ppf(1 - (1 - ci_level) / 2)
         out = []
-        for column in self.psi.T:
-            estimate, se = float(column.mean()), float(column.std(ddof=1) / np.sqrt(n))
+        for column in psi.T:
+            estimate, se = float(column.mean()), float(column.std(ddof=1) / np.sqrt(len(column)))
             out.append(Estimate(estimate, se, estimate - z * se, estimate + z * se))
         return out
 
@@ -80,15 +70,20 @@ def cross_fitted_scores(
     folds: list[tuple[np.ndarray, np.ndarray]],
     propensity_model: Callable[[], ClassifierMixin],
     outcome_model: Callable[[], RegressorMixin],
+    propensity_covariates: pd.DataFrame | None = None,
 ) -> CrossFitResult:
-    """Out-of-fold nuisance predictions and AIPW scores for one or more outcomes (no clipping)."""
+    """Out-of-fold nuisance predictions and AIPW scores for one or more outcomes (no clipping).
+
+    The propensity model can use its own covariates; by default it uses the outcome model's.
+    """
     x = covariates.to_numpy(dtype=float)
+    xp = x if propensity_covariates is None else propensity_covariates.to_numpy(dtype=float)
     y2 = np.asarray(y, dtype=float).reshape(len(y), -1)
     t = np.asarray(treated, dtype=bool)
     propensity = np.empty(len(t))
     mu1, mu0 = np.empty_like(y2), np.empty_like(y2)
     for train, test in folds:
-        propensity[test] = propensity_model().fit(x[train], t[train]).predict_proba(x[test])[:, 1]
+        propensity[test] = propensity_model().fit(xp[train], t[train]).predict_proba(xp[test])[:, 1]
         treated_train, control_train = train[t[train]], train[~t[train]]
         for k in range(y2.shape[1]):
             mu1[test, k] = outcome_model().fit(x[treated_train], y2[treated_train, k]).predict(x[test])

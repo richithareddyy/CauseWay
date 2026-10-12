@@ -15,7 +15,6 @@ from causeway.estimators import (
     cross_fit_folds,
     cross_fitted_scores,
     g_computation,
-    linear_outcome_model,
     linear_propensity_model,
     outcome_regression,
 )
@@ -58,9 +57,9 @@ def test_outcome_regression_recovers_ate_when_correctly_specified():
 @pytest.mark.parametrize(
     ("propensity", "outcome", "consistent"),
     [
-        (linear_propensity_model, linear_outcome_model, True),
+        (linear_propensity_model, LinearRegression, True),
         (linear_propensity_model, constant_outcome, True),  # outcome model wrong, propensity right
-        (constant_propensity, linear_outcome_model, True),  # propensity wrong, outcome model right
+        (constant_propensity, LinearRegression, True),  # propensity wrong, outcome model right
         (constant_propensity, constant_outcome, False),  # both wrong: no protection
     ],
     ids=["both_right", "outcome_wrong", "propensity_wrong", "both_wrong"],
@@ -111,7 +110,7 @@ def test_cross_fitting_never_uses_a_units_own_outcome():
 def test_aipw_matches_econml_with_identical_models_and_folds():
     x, t, y, _ = simulate(3000, 5)
     folds = cross_fit_folds(len(t), 5, 7)
-    hand = cross_fitted_scores(y, t, x, folds, linear_propensity_model, linear_outcome_model).estimates()[0]
+    hand = cross_fitted_scores(y, t, x, folds, linear_propensity_model, LinearRegression).estimates()[0]
     learner = LinearDRLearner(
         model_propensity=linear_propensity_model(),
         model_regression=ArmwiseRegression(),

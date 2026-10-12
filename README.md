@@ -16,8 +16,8 @@ benchmark estimate was computed.
 
 ## Reproducing the data pipeline
 
-Requires **Python 3.12** (`requires-python = ">=3.12,<3.13"`). DoWhy 0.14 does not support Python 3.14,
-and Python 3.12 is used everywhere: locally, in the lock file, in tests and in CI.
+Requires **Python 3.12** (`requires-python = ">=3.12,<3.13"`), which is used everywhere: locally, in the
+lock file, in tests and in CI.
 
 ```bash
 make setup   # .venv with Python 3.12 and the pinned environment in requirements.txt

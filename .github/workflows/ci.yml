@@ -24,9 +24,11 @@ jobs:
         run: |
           ruff check src tests scripts
           ruff format --check src tests scripts
-      - name: Package import check
+      - name: Package and dependency check
         run: |
-          python -c "import causeway, causeway.pipeline, causeway.validation, causeway.processing, causeway.balance"
+          python -m pip check
+          python -c "import importlib, pkgutil, causeway; [importlib.import_module(f'causeway.{m.name}') for m in pkgutil.iter_modules(causeway.__path__)]"
+          causeway --help
           causeway env
       - name: Tests
         run: python -m pytest

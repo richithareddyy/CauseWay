@@ -24,7 +24,6 @@ TRACKED_PACKAGES = [
     "scipy",
     "statsmodels",
     "scikit-learn",
-    "dowhy",
     "econml",
     "doubleml",
 ]

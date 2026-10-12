@@ -1,0 +1,53 @@
+# Robustness and sensitivity plan. Committed before any of these analyses was run.
+# Part II specifications already pre-registered in configs/benchmark/v1.toml ([robustness], [trimming],
+# caliper_sensitivity) are run exactly as written there; this file adds what that file left open.
+
+[meta]
+version = "1.0.0"
+created = "2026-10-11"
+status = "frozen"
+
+[randomness]
+base_seed = 20080320
+bootstrap_stability_streams = [3001, 3002, 3003, 3004, 3005]
+placebo_stream = 3100
+
+# Part I: randomized experiment
+[experiment]
+contrasts = ["mens_vs_control", "womens_vs_control", "mens_vs_womens"]
+# Alternative spend outcomes. None of them drops customers based on what they spent, which would select
+# on a post-treatment variable.
+spend_versions = [
+    "spend (primary)",
+    "spend with the $499 values set to the largest value below $499",
+    "spend winsorized at the 99th percentile of purchasers' spend (pooled over arms)",
+    "spend winsorized at the 95th percentile of purchasers' spend (pooled over arms)",
+    "log(1 + spend), a different estimand: the effect on the log scale",
+]
+duplicates = "re-estimate after keeping only the first copy of each exact duplicate row"
+bootstrap_stability = "BCa intervals for spend recomputed with five further seeds, 5,000 resamples each"
+
+# Part II: constructed benchmark
+[benchmark]
+scenarios = ["A", "B", "C"]
+outcomes = ["spend", "visit"]       # conversion is omitted here to keep runtime reasonable
+n_draws = 200
+propensity_specifications = ["main", "alt_categorical", "alt_gbm"]   # from configs/benchmark/v1.toml
+outcome_specifications = ["main", "alt_gbm"]                          # from configs/benchmark/v1.toml
+trimming = "average the cross-fitted orthogonal scores over units whose estimated propensity is inside the bounds; benchmark ATE_trimmed uses the true e* with the same bounds"
+calipers = [0.05, 0.1, 0.2, 0.5, "none"]
+
+[refutation]
+estimators = ["ipw_ate", "aipw"]
+n_draws = 50                        # the first 50 draws of each comparison and scenario
+placebo = "permute treatment within the sample; refit every nuisance model on the placebo treatment"
+random_common_cause = "add an independent N(0, 1) covariate to the analyst covariates and re-estimate"
+data_subset = "re-estimate on a random 80% subsample"
+interpretation = "refutations check estimator behaviour; passing one is not evidence that no unobserved confounder exists"
+
+[sensitivity]
+draws = "all 200 draws, Scenarios A and C"
+ovb = "Cinelli & Hazlett (2020): robustness values RV (q = 1, alpha = 0.05) for the treatment coefficient of an OLS outcome model with all analyst covariates; bounds for confounders 1x, 2x and 3x as strong as each observed covariate"
+evalue = "VanderWeele & Ding (2017) E-values for the visit risk ratio, from IPW-weighted arm means"
+rosenbaum = "Rosenbaum bounds for the matched visit pairs: largest Gamma at which the one-sided McNemar test still rejects at 0.05"
+truth_check = "in Scenario C, compare each sensitivity summary with the actual strength of the hidden recency covariate, which is known only because the benchmark was constructed"

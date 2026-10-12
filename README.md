@@ -14,7 +14,19 @@ pre-specified causal design, and the review decisions are in [`docs/design.md`](
 observational benchmark was frozen in [`configs/benchmark/v1.toml`](configs/benchmark/v1.toml) before any
 benchmark estimate was computed.
 
-## Reproducing the data pipeline
+## What is implemented
+
+The main question is how much an observational estimate changes when treatment assignment is no longer random. The experiment supplies a reference point; the constructed samples make the confounding mechanism explicit.
+
+- **Experiment:** unadjusted and covariate-adjusted effects, randomization tests, bootstrap intervals, and multiplicity adjustment.
+- **Observational benchmark:** rejection sampling from each randomized pair, propensity weighting and matching, outcome regression, cross-fitted AIPW, and DoubleML's interactive regression model. Estimates are compared with the benchmark for their own target population; an ATT is not treated as an ATE.
+- **Heterogeneity and sensitivity:** causal-forest effect estimates, sample-split group comparisons, targeting-policy evaluation, and checks for overlap, outcome transformations, and unobserved confounding.
+
+The stack is Python, NumPy/pandas, SciPy, statsmodels, scikit-learn, EconML, DoubleML, and Matplotlib. The handwritten AIPW/DML calculations and library cross-checks are in [`estimators.py`](src/causeway/estimators.py), [`dml.py`](src/causeway/dml.py), and [`test_estimators.py`](tests/test_estimators.py).
+
+Generated estimates and figures are not committed: the `reports/` directories currently contain placeholders. This README therefore describes the implemented study and its reproduction steps, without claiming a numerical treatment effect or a winning estimator.
+
+## Reproducing the study
 
 Requires **Python 3.12** (`requires-python = ">=3.12,<3.13"`), which is used everywhere: locally, in the
 lock file, in tests and in CI.
@@ -25,6 +37,8 @@ make data    # download, verify checksum, validate, and build the processed data
 make analysis  # every analysis and the findings report (about 75 min on 8 cores)
 make test    # run the test suite
 ```
+
+`make analysis` also assembles `reports/results/findings/findings_report.md` from the saved tables, with estimator comparisons, assumptions, a figure guide, and provenance checks. The runtime above is the project's reported estimate, not a fresh timing.
 
 `make data` does the following:
 
@@ -59,8 +73,14 @@ after the campaign.
 configs/          data sources and the frozen observational benchmark specification
 docs/design.md    dataset verification, causal design, review decisions
 scripts/          standalone raw-file audit (standard library only)
-src/causeway/     pipeline package: acquisition, validation, processing, balance diagnostics
-tests/            pytest suite (synthetic fixtures for pipeline mechanics)
+src/causeway/     acquisition, validation, experimental and observational estimation, reporting
+tests/            pytest suite: data checks, estimators, benchmark construction and reports
 data/             raw / interim / processed (generated, not versioned)
 reports/          validation reports, figures, results (generated, not versioned)
 ```
+
+## Checks and interpretation
+
+`make test` uses synthetic fixtures and reference calculations to check estimator behavior, shared cross-fitting splits, benchmark targets, reproducible sampling, and failure handling. `make lint` runs Ruff. These checks do not establish that a causal assumption holds in a new dataset.
+
+The observational samples are constructed from one randomized trial. Their hidden-confounder scenario is a controlled stress test, not evidence that adjustment can remove unknown confounding in real customer data. The experimental effects concern assignment to these campaigns and their two-week outcomes; they do not establish long-term revenue or profit effects.

@@ -22,7 +22,7 @@ and Python 3.12 is used everywhere: locally, in the lock file, in tests and in C
 ```bash
 make setup   # .venv with Python 3.12 and the pinned environment in requirements.txt
 make data    # download, verify checksum, validate, and build the processed dataset
-make analysis  # Part I experiment; Part II estimators, heterogeneity and robustness (about 75 min on 8 cores)
+make analysis  # every analysis and the findings report (about 75 min on 8 cores)
 make test    # run the test suite
 ```
 

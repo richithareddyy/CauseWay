@@ -211,7 +211,7 @@ def love_plot(balance: pd.DataFrame, path: Path, threshold: float = 0.1, title: 
     ax.set_xlim(-limit, limit)
     ax.set_xlabel("Standardized mean difference (treated arm minus No E-Mail)")
     ax.grid(axis="y", visible=False)
-    ax.set_title(title or "Covariate balance under randomization")
+    _title(fig, title or "Covariate balance under randomization")
     ax.legend(loc="lower right", fontsize=7.5)
     _footnote(fig, f"Shaded band: |SMD| < {threshold}, the conventional reference for adequate balance.")
     fig.tight_layout()
@@ -243,7 +243,7 @@ def effect_forest(effects: pd.DataFrame, path: Path, estimators: list[str]) -> P
                 solid_capstyle="round",
             )
             ax.plot(row["estimate"] * scale, i, "o", color=color, ms=6, mec=SURFACE, mew=1)
-        ax.set_xlabel(EFFECT_AXIS[outcome])
+        ax.set_xlabel("$ per customer" if outcome == "spend" else "Percentage points")
         ax.grid(axis="y", visible=False)
         ax.set_title(outcome.capitalize() + (" (primary)" if outcome == "spend" else " (secondary)"))
     axes[0].set_yticks(
@@ -423,7 +423,7 @@ def naive_vs_oracle(summary_draws: pd.DataFrame, path: Path) -> Path:
     ax.set_xlabel("Error relative to the experimental ATE benchmark (% of benchmark)")
     ax.grid(axis="y", visible=False)
     ax.legend(loc="lower right", fontsize=7.5)
-    ax.set_title("Naive and oracle estimates across 200 constructed samples (median, 2.5-97.5 percentiles)")
+    _title(fig, "Naive and oracle estimates across 200 constructed samples (median, 2.5-97.5 percentiles)")
     _footnote(
         fig,
         "Benchmark: difference in means on the full randomized pair. The oracle uses the true design "
@@ -566,7 +566,9 @@ def weight_distributions(panels: list[dict], path: Path) -> Path:
         ax.set_xlabel("ATE weight / mean weight in arm (log scale)")
         ax.grid(axis="x", visible=False)
         ax.legend(loc="upper right", fontsize=6.5)
-    np.atleast_1d(axes)[0].set_ylabel("Retained customers")
+    first = np.atleast_1d(axes)[0]
+    first.set_ylim(0, first.get_ylim()[1] * 1.35)
+    first.set_ylabel("Retained customers")
     _title(fig, "Inverse probability weights (display draw 0)")
     _footnote(
         fig,
@@ -838,12 +840,41 @@ def gates_plot(gates: pd.DataFrame, verdicts: pd.DataFrame, path: Path) -> Path:
     return save(fig, path)
 
 
+SEGMENT_NAMES = {
+    "history_segment": "Past-year spend",
+    "recency_band": "Months since purchase",
+    "channel": "Channel",
+    "newbie": "New customer",
+    "zip_code": "ZIP area",
+    "mens": "Bought Mens merchandise",
+    "womens": "Bought Womens merchandise",
+}
+
+
+def _segment_label(variable: str, level) -> str:
+    level = str(level)
+    if variable == "history_segment":
+        level = level.split(") ", 1)[-1]  # "1) $0 - $100" -> "$0 - $100"
+    elif level in ("0", "1"):
+        level = "yes" if level == "1" else "no"
+    return f"{SEGMENT_NAMES.get(variable, variable)}: {level}"
+
+
+def _segment_rows(levels: pd.DataFrame) -> list[tuple]:
+    """(variable, level) pairs in display order."""
+    variables = list(dict.fromkeys(levels["variable"]))
+    return sorted(
+        levels[["variable", "level"]].drop_duplicates().itertuples(index=False),
+        # recency bands are strings, so "10-12" would otherwise sort before "4-6"
+        key=lambda r: (variables.index(r[0]), int(str(r[1]).split("-")[0]) if r[0] == "recency_band" else 0),
+    )
+
+
 def segment_forest(levels: pd.DataFrame, overall: dict[str, float], outcome: str, path: Path) -> Path:
     """Within each pre-specified segment, how large is the effect and how uncertain is it?"""
     apply_style()
     contrasts = list(dict.fromkeys(levels["contrast"]))
-    rows = levels[["variable", "level"]].drop_duplicates().itertuples(index=False)
-    rows = list(rows)
+    rows = _segment_rows(levels)
     scale = OUTCOME_AXIS[outcome][1]
     fig, axes = plt.subplots(1, len(contrasts), figsize=(10, 0.24 * len(rows) + 1.8), sharey=True)
     for ax, contrast in zip(np.atleast_1d(axes), contrasts, strict=True):
@@ -875,7 +906,7 @@ def segment_forest(levels: pd.DataFrame, overall: dict[str, float], outcome: str
             if rows[boundary][0] != rows[boundary - 1][0]:
                 ax.axhline(boundary - 0.5, color=GRID, lw=0.8)
     first = np.atleast_1d(axes)[0]
-    first.set_yticks(range(len(rows)), [f"{v}: {lv}" for v, lv in rows], fontsize=7)
+    first.set_yticks(range(len(rows)), [_segment_label(v, lv) for v, lv in rows], fontsize=7)
     first.set_ylim(len(rows) - 0.5, -0.5)
     _title(fig, f"{outcome.capitalize()}: effect within pre-specified segments (exploratory)")
     _footnote(
@@ -914,6 +945,7 @@ def cate_distribution(panels: list[dict], path: Path) -> Path:
             fontsize=7,
             color=INK_SECONDARY,
         )
+        ax.set_ylim(0, ax.get_ylim()[1] * 1.3)
     np.atleast_1d(axes)[0].set_ylabel("Customers")
     _title(fig, "Causal forest: predicted individual effects (descriptive)")
     _footnote(
@@ -1180,6 +1212,53 @@ def sensitivity_summary(sensitivity: pd.DataFrame, path: Path) -> Path:
         fig,
         "Circles: Scenario A (no hidden confounder). Squares: Scenario C (recency hidden). Cross: the "
         "hidden recency's actual partial R² with visit.",
+    )
+    fig.tight_layout()
+    return save(fig, path)
+
+
+def recovery_heatmap(performance: pd.DataFrame, path: Path, estimators: list[str]) -> Path:
+    """Which estimators recover their experimental benchmark, and under which kind of selection?"""
+    apply_style()
+    columns = [(c, s) for c in ("mens_vs_control", "womens_vs_control") for s in ("A", "B", "C")]
+    outcomes = ["spend", "visit"]
+    fig, axes = plt.subplots(1, 2, figsize=(11, 0.36 * len(estimators) + 1.9), sharey=True)
+    ramp = matplotlib.colors.LinearSegmentedColormap.from_list("error", [SURFACE, "#b9b8af", "#55544f"])
+    for ax, outcome in zip(axes, outcomes, strict=True):
+        cells = performance[performance["outcome"] == outcome].set_index(
+            ["estimator", "comparison", "scenario"]
+        )[["bias_pct", "unbiased_within_mc_error"]]
+        values = np.array([[cells.loc[(e, c, s), "bias_pct"] * 100 for c, s in columns] for e in estimators])
+        ax.imshow(np.abs(values), cmap=ramp, vmin=0, vmax=60, aspect="auto")
+        for i, estimator in enumerate(estimators):
+            for j, (comparison, scenario) in enumerate(columns):
+                clean = bool(cells.loc[(estimator, comparison, scenario), "unbiased_within_mc_error"])
+                ax.text(
+                    j,
+                    i,
+                    f"{values[i, j]:+.0f}%",
+                    ha="center",
+                    va="center",
+                    fontsize=7.5,
+                    fontweight="normal" if clean else "bold",
+                    color=INK if abs(values[i, j]) < 40 else SURFACE,
+                )
+        ax.set_xticks(
+            range(len(columns)), [f"{c.split('_')[0].capitalize()}\n{s}" for c, s in columns], fontsize=7.5
+        )
+        ax.tick_params(length=0)
+        ax.grid(False)
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+        ax.axvline(2.5, color=SURFACE, lw=3)
+        ax.set_title(f"{outcome.capitalize()}: mean bias, % of matched benchmark", fontsize=9)
+    axes[0].set_yticks(range(len(estimators)), [ESTIMATOR_DISPLAY[e] for e in estimators], fontsize=7.5)
+    _title(fig, "Estimator recovery across 200 constructed samples per cell")
+    _footnote(
+        fig,
+        "Columns: comparison and scenario (A moderate selection, B strong, C recency hidden). Bold: bias "
+        "larger than twice its Monte Carlo SE. Shading darkens with |bias| and saturates at 60%. Each "
+        "estimator is compared with the benchmark for its own estimand (ATE or ATT).",
     )
     fig.tight_layout()
     return save(fig, path)

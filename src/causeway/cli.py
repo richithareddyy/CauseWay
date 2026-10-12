@@ -20,6 +20,7 @@ REPORTS = {
     "compare": ("run_comparison_report", "Part II: compare every estimator with the benchmark"),
     "heterogeneity": ("run_heterogeneity_report", "heterogeneous effects and targeting"),
     "robustness": ("run_robustness_report", "robustness and sensitivity checks"),
+    "findings": ("build_findings_report", "final report from every saved result (no recomputation)"),
 }
 
 
@@ -46,9 +47,11 @@ def _data(_: argparse.Namespace) -> int:
 
 
 def _report(args: argparse.Namespace) -> int:
-    from causeway import reporting
+    from causeway import findings, reporting
 
-    if getattr(args, "render_only", False):
+    if args.command == "findings":
+        outputs = findings.build_findings_report()
+    elif getattr(args, "render_only", False):
         outputs = getattr(reporting, f"render_{args.command}_report")()
     else:
         outputs = getattr(reporting, REPORTS[args.command][0])()

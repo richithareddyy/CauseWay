@@ -43,6 +43,7 @@ analysis:
 	$(RUN) compare
 	$(RUN) heterogeneity
 	$(RUN) robustness
+	$(RUN) findings
 
 env:
 	$(RUN) env

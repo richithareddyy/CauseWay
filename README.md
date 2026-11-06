@@ -1,8 +1,8 @@
 # CauseWay
 
-A company emails its best customers and sees them spend more. Did the email cause that, or would they have bought anyway? Observational data can't separate the two, but a randomized experiment can, and it also gives a known answer to test observational methods against.
+A company emails its best customers and sees them spend more. Did the email cause that, or would they have bought anyway? That comparison alone can’t tell you. CauseWay starts with a randomized email experiment, then deliberately creates biased samples to test how well causal methods recover the experimental estimate.
 
-So this study starts with the Hillstrom randomized email experiment (64,000 customers) and estimates the effect of assignment to each campaign. It then removes the randomization on purpose, using RCT rejection sampling so the selection rule is known, and scores weighting, matching, regression, AIPW, and DML against the experimental benchmark.
+The study uses the Hillstrom experiment (64,000 customers) and estimates the effect of assignment to each campaign. It then removes the randomization on purpose, using RCT rejection sampling so the selection rule is known, and scores weighting, matching, regression, AIPW, and DML against the experimental benchmark.
 
 Python 3.12, pandas, scikit-learn, EconML, DoubleML.
 

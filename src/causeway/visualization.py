@@ -1262,3 +1262,60 @@ def recovery_heatmap(performance: pd.DataFrame, path: Path, estimators: list[str
     )
     fig.tight_layout()
     return save(fig, path)
+
+
+EXTENSION_LABELS = {
+    **ESTIMATOR_DISPLAY,
+    "oracle_ipw_att": "Oracle IPW (ATT, true e*)",
+    "oracle_trimmed": "Oracle IPW (trimmed, true e*)",
+    "aipw_trimmed": "AIPW, trimmed by estimated e",
+    "dml_irm_att": "DML (ATT)",
+}
+
+
+def extension_heatmap(summary: pd.DataFrame, path: Path, estimators: list[str], outcomes: list[str]) -> Path:
+    """Do the Part II conclusions hold on a second randomized trial and under other kinds of selection?"""
+    apply_style()
+    scenarios = ["A", "N", "P", "H"]
+    fig, axes = plt.subplots(1, len(outcomes), figsize=(9.5, 0.36 * len(estimators) + 1.9), sharey=True)
+    ramp = matplotlib.colors.LinearSegmentedColormap.from_list("error", [SURFACE, "#b9b8af", "#55544f"])
+    for ax, outcome in zip(np.atleast_1d(axes), outcomes, strict=True):
+        cells = summary[summary["outcome"] == outcome].set_index(["estimator", "scenario"])
+        values = np.array([[cells.loc[(e, s), "bias_pct"] * 100 for s in scenarios] for e in estimators])
+        ax.imshow(np.abs(np.nan_to_num(values, nan=0.0)), cmap=ramp, vmin=0, vmax=60, aspect="auto")
+        for i, estimator in enumerate(estimators):
+            for j, scenario in enumerate(scenarios):
+                value = values[i, j]
+                clean = bool(cells.loc[(estimator, scenario), "recovers"])
+                ax.text(
+                    j,
+                    i,
+                    "n/a" if np.isnan(value) else f"{value:+.0f}%",
+                    ha="center",
+                    va="center",
+                    fontsize=7.5,
+                    fontweight="normal" if clean else "bold",
+                    color=INK if np.isnan(value) or abs(value) < 40 else SURFACE,
+                )
+        ax.set_xticks(
+            range(len(scenarios)),
+            ["A\nlinear", "N\nnonlinear", "P\npoor overlap", "H\nf6 hidden"],
+            fontsize=7.5,
+        )
+        ax.tick_params(length=0)
+        ax.grid(False)
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+        ax.set_title(f"{outcome.capitalize()}: mean bias, % of its reference", fontsize=9)
+    np.atleast_1d(axes)[0].set_yticks(
+        range(len(estimators)), [EXTENSION_LABELS.get(e, e) for e in estimators], fontsize=7.5
+    )
+    _title(fig, "Validation extension: estimator recovery on Criteo Uplift v2.1, 200 samples per cell")
+    _footnote(
+        fig,
+        "Bold: bias larger than twice its Monte Carlo SE. Each estimator is compared with the reference for "
+        "its own estimand (ATE, ATT or trimmed ATE), computed on the 200,000-user pool. Shading saturates "
+        "at 60%.",
+    )
+    fig.tight_layout()
+    return save(fig, path)

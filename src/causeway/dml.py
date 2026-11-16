@@ -24,8 +24,10 @@ def doubleml_irm(
     folds: list[tuple[np.ndarray, np.ndarray]],
     seed: int,
     ci_level: float = 0.95,
+    score: str = "ATE",
 ) -> tuple[Estimate, dict[str, np.ndarray]]:
-    """ATE from doubleml.DoubleMLIRM with the given folds (n_rep = 1, unnormalized IPW part).
+    """ATE (or ATT with score="ATTE") from doubleml.DoubleMLIRM with the given folds (n_rep = 1,
+    unnormalized IPW part).
 
     Also returns the out-of-fold nuisance predictions (g0, g1, m) for predictive diagnostics."""
     data = covariates.reset_index(drop=True).assign(
@@ -37,7 +39,7 @@ def doubleml_irm(
         ml_m=HistGradientBoostingClassifier(random_state=seed),
         n_folds=len(folds),
         n_rep=1,
-        score="ATE",
+        score=score,
         ps_processor_config=NO_CLIPPING,
         draw_sample_splitting=False,
     )

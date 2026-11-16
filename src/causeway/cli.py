@@ -69,6 +69,27 @@ def _docs(_: argparse.Namespace) -> int:
     return 0
 
 
+def _extension_data(_: argparse.Namespace) -> int:
+    from causeway.extension import build_pool
+
+    pool = build_pool()
+    print(f"pool     {len(pool):,} users, treatment share {pool['treatment'].mean():.3f}")
+    return 0
+
+
+def _extension(args: argparse.Namespace) -> int:
+    from causeway import extension
+
+    if args.render_only:
+        outputs = extension.render_extension_report()
+    else:
+        outputs = extension.run_extension_report(n_jobs=args.jobs)
+    print(f"report   {outputs.report_path}")
+    for figure in outputs.figures:
+        print(f"figure   {figure}")
+    return 0
+
+
 def _env(_: argparse.Namespace) -> int:
     print(json.dumps(environment(), indent=2))
     return 0
@@ -90,6 +111,13 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("docs", help="copy the findings report and key figures into docs/").set_defaults(
         func=_docs
     )
+    commands.add_parser(
+        "extension-data", help="validation extension: verify the Criteo file and build the pool"
+    ).set_defaults(func=_extension_data)
+    extension = commands.add_parser("extension", help="validation extension v1 on Criteo Uplift v2.1")
+    extension.add_argument("--render-only", action="store_true", help="redraw the report from saved tables")
+    extension.add_argument("--jobs", type=int, default=8, help="parallel workers")
+    extension.set_defaults(func=_extension)
     commands.add_parser("env", help="print Python and dependency versions").set_defaults(func=_env)
     args = parser.parse_args(argv)
     return args.func(args)

@@ -5,13 +5,15 @@ BIN    := $(VENV)/bin
 # because the OS marks files inside .venv as hidden.
 RUN    := PYTHONPATH=src $(BIN)/python -m causeway.cli
 
-.PHONY: help setup lock data analysis docs env test lint format clean
+.PHONY: help setup lock data analysis docs extension-data extension env test lint format clean
 
 help:
 	@echo "setup   create .venv with Python 3.12 and install the pinned environment"
 	@echo "data    download (checksum-verified), validate and process the dataset"
 	@echo "analysis run every pre-specified analysis and write the findings report"
 	@echo "docs    copy the findings report and key figures into docs/ (tracked in git)"
+	@echo "extension-data  verify the Criteo Uplift v2.1 download and build the extension pool"
+	@echo "extension       run validation extension v1 (configs/extension/v1.toml)"
 	@echo "test    run the test suite"
 	@echo "lint    run ruff checks"
 	@echo "format  apply ruff formatting fixes"
@@ -48,6 +50,12 @@ analysis:
 
 docs:
 	$(RUN) docs
+
+extension-data:
+	$(RUN) extension-data
+
+extension:
+	$(RUN) extension
 
 env:
 	$(RUN) env

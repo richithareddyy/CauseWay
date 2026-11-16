@@ -787,12 +787,13 @@ def extension_markdown(tables: dict[str, pd.DataFrame], protocol: dict, provenan
     ]
     lines += [_md(checks.assign(max_abs_difference=checks["max_abs_difference"].map("{:.1e}".format))), ""]
 
-    lines += ["## 7. Expectations written before outcomes were read", ""]
+    lines += _post_hoc_sections(tables)
+    lines += ["## 9. Expectations written before outcomes were read", ""]
     for key, text in protocol["expectations"].items():
         lines.append(f"- **{key}**: {text}")
     lines += [
         "",
-        "## 8. What this does and does not show",
+        "## 10. What this does and does not show",
         "",
         "- It tests estimator behaviour under selection rules that are known by construction. Success here "
         "does "
@@ -803,7 +804,7 @@ def extension_markdown(tables: dict[str, pd.DataFrame], protocol: dict, provenan
         "this "
         "extension neither replaces nor reruns them.",
         "",
-        "## 9. Provenance and commands",
+        "## 11. Provenance and commands",
         "",
         f"- Code: `{(provenance['code']['commit'] or 'unknown')[:7]}`"
         + (
@@ -814,6 +815,19 @@ def extension_markdown(tables: dict[str, pd.DataFrame], protocol: dict, provenan
         f"- Protocol SHA-256 `{provenance['protocol']['sha256'][:12]}…`; "
         f"gate SHA-256 `{provenance['gate']['sha256'][:12]}…`.",
         f"- Pool parquet SHA-256 `{provenance['data']['pool_sha256'][:12]}…`.",
+        *(
+            [
+                "- Post-hoc analyses (Sections 7 and 8): code "
+                f"`{(provenance['post_hoc']['code']['commit'] or 'unknown')[:7]}`"
+                + (
+                    ", with uncommitted changes."
+                    if provenance["post_hoc"]["code"]["uncommitted_changes"]
+                    else "."
+                )
+            ]
+            if "post_hoc" in provenance
+            else []
+        ),
         f"- Python {provenance['environment']['python']}; "
         + ", ".join(f"{k} {v}" for k, v in provenance["environment"]["packages"].items())
         + ".",
@@ -827,6 +841,215 @@ def extension_markdown(tables: dict[str, pd.DataFrame], protocol: dict, provenan
     return "\n".join(lines)
 
 
+# Post-hoc analyses: added after the frozen run was read, reported separately and labelled as such.
+
+POST_HOC_SEED = 20181017
+POST_HOC_TABLES = ["post_hoc_reference_checks", "post_hoc_hidden_shift"]
+
+
+def reference_checks(pool: pd.DataFrame, protocol: dict) -> pd.DataFrame:
+    """The full-pool effect with and without covariate adjustment: is the difference in means a clean
+    reference for estimators that adjust for the features?"""
+    x = pool[protocol["analyst"]["covariates"]]
+    t = pool["treatment"].to_numpy(dtype=bool)
+    folds = cross_fit_folds(len(t), protocol["estimation"]["cross_fit_folds"], POST_HOC_SEED)
+    rows = []
+    for outcome in [protocol["outcomes"]["primary"], *protocol["outcomes"]["secondary"]]:
+        y = pool[outcome].to_numpy(dtype=float)
+        dim = neyman_difference(y[t], y[~t])
+        aipw = cross_fitted_scores(y, t, x, folds, linear_propensity_model, LinearRegression).estimates()[0]
+        dml, predictions = doubleml_irm(y, t, x, folds, POST_HOC_SEED)
+        for method, value in (
+            ("difference in means", dim),
+            ("Lin regression adjustment", lin_adjusted(y, t, x)),
+            ("cross-fitted AIPW, linear", aipw),
+            ("DML, gradient boosting", dml),
+        ):
+            rows.append(
+                {
+                    "outcome": outcome,
+                    "method": method,
+                    "value": value.estimate,
+                    "se": value.se,
+                    "gap_from_difference": value.estimate - dim.estimate,
+                    "gap_in_difference_se": (value.estimate - dim.estimate) / dim.se,
+                    "pool_propensity_min": float(predictions["ml_m"].min()),
+                    "pool_propensity_max": float(predictions["ml_m"].max()),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def hidden_shift(estimates: pd.DataFrame, refs: pd.DataFrame) -> pd.DataFrame:
+    """Scenario H retains exactly the users of scenario A and only hides f6, so the per-draw difference
+    H - A isolates the effect of the hidden feature without relying on any reference."""
+    keys = ["draw", "estimator", "outcome"]
+    a = estimates[estimates["scenario"] == "A"].set_index(keys)["estimate"]
+    h = estimates[estimates["scenario"] == "H"].set_index(keys)["estimate"]
+    shift = (h - a).dropna().rename("shift").reset_index()
+    ate = refs[(refs["scenario"] == "A") & (refs["estimand"] == "ATE")].set_index("outcome")["value"]
+    rows = []
+    for (estimator, outcome), group in shift.groupby(["estimator", "outcome"]):
+        mean, mc_se = group["shift"].mean(), group["shift"].std(ddof=1) / np.sqrt(len(group))
+        rows.append(
+            {
+                "estimator": estimator,
+                "outcome": outcome,
+                "draws": len(group),
+                "mean_shift": mean,
+                "mc_se": mc_se,
+                "shift_pct_of_difference_in_means": mean / ate[outcome],
+                "beyond_2_mc_se": bool(abs(mean) > 2 * mc_se),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def compute_post_hoc(paths: DataPaths | None = None) -> dict[str, pd.DataFrame]:
+    from causeway.pipeline import environment
+    from causeway.provenance import _git_state
+
+    paths = paths or DataPaths()
+    protocol = load_protocol()
+    results = paths.results("extension")
+    estimates = pd.read_csv(results / "estimates.csv")
+    refs = pd.read_csv(results / "references.csv")
+    tables = {
+        "post_hoc_reference_checks": reference_checks(load_pool(paths), protocol),
+        "post_hoc_hidden_shift": hidden_shift(estimates, refs),
+    }
+    for name, table in tables.items():
+        table.to_csv(results / f"{name}.csv", index=False)
+    stamp = {"code": _git_state(), "environment": environment(), "seed": POST_HOC_SEED}
+    (results / "post_hoc_provenance.json").write_text(json.dumps(stamp, indent=2) + "\n")
+    return tables
+
+
+def _post_hoc_sections(tables: dict[str, pd.DataFrame]) -> list[str]:
+    if "post_hoc_reference_checks" not in tables:
+        return []
+    checks, shift = tables["post_hoc_reference_checks"], tables["post_hoc_hidden_shift"]
+    summary, adjusted, refs = tables["summary"], tables["summary_vs_adjusted"], tables["references"]
+    lines = [
+        "## 7. Post-hoc analyses (not in the frozen protocol)",
+        "",
+        "Added after the frozen run had been read, because the two predeclared ATE references disagree. "
+        "They use only saved outputs and the pool.",
+        "",
+        "**Full-pool effect with and without adjustment.** If treatment were unrelated to the features in "
+        "the pool, every row would agree up to noise much smaller than the difference in means' own SE.",
+        "",
+        _md(
+            pd.DataFrame(
+                {
+                    "Outcome": checks["outcome"],
+                    "Method": checks["method"],
+                    "Effect (pp)": (checks["value"] * 100).map("{:.3f}".format),
+                    "SE (pp)": (checks["se"] * 100).map("{:.3f}".format),
+                    "Gap from difference in means": [
+                        "—" if m == "difference in means" else f"{g * 100:+.3f} pp ({z:+.2f} SE)"
+                        for m, g, z in zip(
+                            checks["method"],
+                            checks["gap_from_difference"],
+                            checks["gap_in_difference_se"],
+                            strict=True,
+                        )
+                    ],
+                }
+            )
+        ),
+        "",
+        f"A cross-fitted gradient-boosting propensity on the full pool ranges from "
+        f"{checks['pool_propensity_min'].iloc[0]:.2f} to {checks['pool_propensity_max'].iloc[0]:.2f}.",
+        "",
+        "**Hiding f6, paired by draw.** Scenario H keeps exactly the users of scenario A and only hides f6, "
+        "so the per-draw difference H − A measures the effect of the hidden feature without any reference.",
+        "",
+    ]
+    shown = shift[
+        shift["estimator"].isin(
+            ["outcome_regression", "ipw_ate", "ipw_att", "aipw", "dml_irm", "dml_irm_att"]
+        )
+    ]
+    lines += [
+        _md(
+            pd.DataFrame(
+                {
+                    "Outcome": shown["outcome"],
+                    "Estimator": shown["estimator"],
+                    "Mean shift H − A (pp)": [
+                        f"{m * 100:+.3f} ± {2 * e * 100:.3f}"
+                        for m, e in zip(shown["mean_shift"], shown["mc_se"], strict=True)
+                    ],
+                    "As % of the difference in means": shown["shift_pct_of_difference_in_means"].map(
+                        "{:+.1%}".format
+                    ),
+                    "Beyond 2 MC SE": shown["beyond_2_mc_se"].map({True: "yes", False: "no"}),
+                }
+            )
+        ),
+        "",
+    ]
+
+    def cell(table, estimator, scenario, outcome="visit"):
+        return table[
+            (table["estimator"] == estimator)
+            & (table["scenario"] == scenario)
+            & (table["outcome"] == outcome)
+        ].iloc[0]
+
+    visit = refs[(refs["outcome"] == "visit") & (refs["scenario"] == "A")].set_index("estimand")
+    gap = visit.loc["ATE_adjusted", "value"] - visit.loc["ATE", "value"]
+    dml_pool = checks[(checks["outcome"] == "visit") & (checks["method"] == "DML, gradient boosting")].iloc[0]
+    oracle_flags = int((~summary[summary["estimator"].str.startswith("oracle")]["recovers"]).sum())
+    oracle_cells = int(summary["estimator"].str.startswith("oracle").sum())
+    recover_adjusted = [
+        e
+        for e in ["outcome_regression", "ipw_ate", "aipw", "dml_irm"]
+        if bool(cell(adjusted, e, "A")["recovers"])
+    ]
+    h = shift[shift["outcome"] == "visit"].set_index("estimator")
+    moved = {e: h.loc[e, "mean_shift"] * 100 for e in ["ipw_ate", "aipw", "outcome_regression", "dml_irm"]}
+    n_bias = {e: cell(summary, e, "N")["bias_pct"] for e in ["ipw_ate", "aipw"]}
+    n_adjusted = {e: cell(adjusted, e, "N")["bias_pct"] for e in ["ipw_ate", "aipw", "dml_irm"]}
+    oracle_p_coverage = cell(summary, "oracle_ipw", "P")["coverage"]
+    a_bias = [cell(summary, e, "A")["bias_pct"] for e in ["outcome_regression", "ipw_ate", "aipw", "dml_irm"]]
+    lines += [
+        "## 8. Reading the results",
+        "",
+        f"- **The construction works.** {oracle_flags} of {oracle_cells} oracle cells show bias beyond twice "
+        "their Monte Carlo SE.",
+        f"- **The difference in means is not a clean reference for adjusted estimators on visit.** Adjusting "
+        f"for the features moves the full-pool visit effect by {gap * 100:+.3f} pp "
+        f"({gap / visit.loc['ATE', 'value']:+.0%}; {gap / visit.loc['ATE', 'se']:+.1f} SE), and the "
+        f"nonparametric DML adjustment agrees ({dml_pool['value'] * 100:.3f} pp). Treatment in the released "
+        "file is slightly predictable from features that predict visits. The gate's tolerances, set before "
+        "any outcome was read, did not anticipate that so small an imbalance could matter this much. In "
+        f"scenario A the adjusted estimators' visit bias against the difference in means ranges from "
+        f"{min(a_bias):+.0%} to {max(a_bias):+.0%}, the same order as this gap.",
+        "- **Scenario A, against the adjusted reference:** "
+        + (", ".join(recover_adjusted) if recover_adjusted else "no ATE estimator")
+        + " recover it within Monte Carlo error on visit.",
+        f"- **Nonlinear selection (N):** linear-propensity IPW is biased by {n_bias['ipw_ate']:+.0%} and "
+        f"linear AIPW by {n_bias['aipw']:+.0%} against the difference in means "
+        f"({n_adjusted['ipw_ate']:+.0%} and {n_adjusted['aipw']:+.0%} against the adjusted reference). "
+        "DML with boosted nuisances is closer: "
+        f"{n_adjusted['dml_irm']:+.0%} against the adjusted reference.",
+        f"- **Hiding f6 (H):** the paired shift on visit is {moved['ipw_ate']:+.3f} pp for IPW, "
+        f"{moved['aipw']:+.3f} pp for AIPW, {moved['outcome_regression']:+.3f} pp for outcome regression and "
+        f"{moved['dml_irm']:+.3f} pp for DML. A hidden "
+        "selection feature moves every adjusted estimate, as in the original study; the size depends on the "
+        "estimator and on how much of f6 the remaining features carry.",
+        f"- **Poor overlap (P):** the oracle's own visit interval covers its reference in only "
+        f"{oracle_p_coverage:.0%} of draws, so interval coverage is not informative "
+        "there; DoubleML's nu2 fallbacks are also concentrated in this scenario.",
+        "- **Conversion** is rare (about 0.3%), so even the oracle's Monte Carlo error is large; conversion "
+        "results support few conclusions either way.",
+        "",
+    ]
+    return lines
+
+
 def render_extension_report(paths: DataPaths | None = None):
     from causeway import visualization as viz
     from causeway.reporting import ReportOutputs
@@ -835,7 +1058,11 @@ def render_extension_report(paths: DataPaths | None = None):
     protocol = load_protocol()
     results = paths.results("extension")
     tables = {name: pd.read_csv(results / f"{name}.csv") for name in EXTENSION_TABLES}
+    if not all((results / f"{name}.csv").exists() for name in POST_HOC_TABLES):
+        compute_post_hoc(paths)
+    tables.update({name: pd.read_csv(results / f"{name}.csv") for name in POST_HOC_TABLES})
     provenance = json.loads((results / "provenance.json").read_text())
+    provenance["post_hoc"] = json.loads((results / "post_hoc_provenance.json").read_text())
     outcomes = [protocol["outcomes"]["primary"], *protocol["outcomes"]["secondary"]]
     figure = viz.extension_heatmap(
         tables["summary"], paths.figures("extension") / "extension_recovery.png", FIGURE_ESTIMATORS, outcomes

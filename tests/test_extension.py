@@ -166,9 +166,34 @@ def test_report_renders_from_a_small_run(protocol, tmp_path):
         "code": {"commit": "abcdef0", "uncommitted_changes": False},
         "environment": {"python": "3.12", "packages": {"numpy": "2"}},
     }
+    tables["post_hoc_reference_checks"] = ex.reference_checks(small, protocol)
+    tables["post_hoc_hidden_shift"] = ex.hidden_shift(estimates, refs)
     text = ex.extension_markdown(tables, protocol, provenance)
-    for heading in ("## 1. Data and references", "## 3. Estimator recovery", "## 7. Expectations"):
+    assert (
+        "## 7. Post-hoc analyses (not in the frozen protocol)" in text and "## 8. Reading the results" in text
+    )
+    for heading in ("## 1. Data and references", "## 3. Estimator recovery", "## 9. Expectations"):
         assert heading in text
     assert "true answer" not in text and "the truth" not in text
     figure = viz.extension_heatmap(summary, tmp_path / "h.png", ex.FIGURE_ESTIMATORS, ["visit", "conversion"])
     assert figure.exists() and figure.stat().st_size > 0
+
+
+def test_hidden_shift_is_paired_by_draw():
+    rows = []
+    for draw in range(4):
+        for scenario, value in (("A", 1.0 + draw), ("H", 1.5 + draw)):
+            rows.append(
+                {
+                    "scenario": scenario,
+                    "draw": draw,
+                    "estimator": "aipw",
+                    "outcome": "visit",
+                    "estimate": value,
+                }
+            )
+    refs = pd.DataFrame({"scenario": ["A"], "estimand": ["ATE"], "outcome": ["visit"], "value": [2.0]})
+    shift = ex.hidden_shift(pd.DataFrame(rows), refs).iloc[0]
+    # the draw-to-draw variation cancels: every paired difference is exactly 0.5
+    assert shift["mean_shift"] == pytest.approx(0.5) and shift["mc_se"] == pytest.approx(0.0)
+    assert shift["shift_pct_of_difference_in_means"] == pytest.approx(0.25) and shift["draws"] == 4

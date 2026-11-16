@@ -12,7 +12,9 @@ the randomized MineThatData e-mail experiment (Hillstrom, 2008).
 The full results, with every estimator, scenario, assumption and figure, are in the
 [findings report](docs/findings.md). The verified dataset description, the pre-specified design and every
 review decision are in [`docs/design.md`](docs/design.md). The observational benchmark was frozen in
-[`configs/benchmark/v1.toml`](configs/benchmark/v1.toml) before any benchmark estimate was computed.
+[`configs/benchmark/v1.toml`](configs/benchmark/v1.toml), whose checksum a test pins. The commit history
+records that it was written before the estimators that use it, but commit order alone cannot prove what had
+or had not been inspected.
 
 ## Results at a glance
 
@@ -22,7 +24,7 @@ review decision are in [`docs/design.md`](docs/design.md). The observational ben
 - Once randomization is removed, comparing e-mailed with non-e-mailed customers **overstates the effect
   by about half** (+48% and +57% in the moderate-selection scenario).
 - When every confounder is observed, inverse probability weighting and cross-fitted AIPW recover the
-  experimental answer to within Monte Carlo error. Linear outcome regression and 1:1 caliper matching do
+  experimental reference to within Monte Carlo error. Linear outcome regression and 1:1 caliper matching do
   not.
 - When one confounder is hidden, **every estimator stays biased**: weighting, regression, AIPW and DML by
   14% to 47% on spend. Refutation tests still pass, and standard sensitivity summaries make the estimates
@@ -58,10 +60,14 @@ does not identify the effect of receiving or opening one; neither was recorded.
 
 1. **Part I** estimates the intention-to-treat effects from the experiment with design-based methods.
 2. **Part II** subsamples each randomized pair with a known selection rule, so that treatment depends on
-   customer history as it would in observational data. The full randomized pair still supplies the true
-   answer, so each observational estimator can be scored against it.
+   customer history as it would in observational data. Each observational estimator is scored against the
+   difference in means over the full randomized pair. That experimental reference is the exact target of the
+   construction, conditional on the observed trial, but as an estimate of the population effect it carries
+   its own sampling uncertainty (for Mens spend, 95% CI $0.49 to $1.05).
 3. **Heterogeneity, targeting, robustness and sensitivity** analyses are pre-specified in
-   [`configs/`](configs) and were committed before their results.
+   [`configs/`](configs) and were committed before those analyses were run. Commit order records when each
+   plan was written, not what had been seen: the Milestone 1 audit computed arm-level outcome rates, as the
+   design record discloses.
 
 Every Part II estimate is compared with the experimental benchmark for its own estimand: ATE estimators
 with the ATE, ATT estimators with the ATT. An ATT is never treated as an ATE.
@@ -155,7 +161,8 @@ diagnostics an analyst would normally run do not reveal this:
 - **Sensitivity summaries look better, not worse.** The robustness value for visit rises from 0.091 to
   0.116 (Mens) and from 0.057 to 0.079 (Womens) when the confounder is hidden; E-values and Rosenbaum Γ
   rise as well. Omitted-variable bounds for a confounder as strong as the observed covariate giving the
-  largest bound cover the true error in about one draw in five; at twice that strength, about nine in ten.
+  largest bound cover the error relative to the experimental reference in about one draw in five; at twice
+  that strength, about nine in ten.
 
 ![Sensitivity summaries in Scenarios A and C](docs/figures/sensitivity_summary.png)
 
@@ -163,8 +170,9 @@ diagnostics an analyst would normally run do not reveal this:
 
 Confidence intervals measure sampling variability under the stated assumptions; they say nothing about
 whether the assumptions hold. In Part I randomization secures identification, so the intervals are the
-whole uncertainty. In Scenario C the cross-fitted AIPW interval for the visit effect covers the truth in
-only 8% and 12% of draws, against 97% and 98% for the oracle. For spend the same biased intervals still
+whole uncertainty. In Scenario C the cross-fitted AIPW interval for the visit effect covers the
+experimental reference in only 8% and 12% of draws, against 97% and 98% for the oracle (the calibration
+point, because every constructed sample comes from the same trial). For spend the same biased intervals still
 cover in 97% and 95% of draws, but only because spend is noisy enough to make them wide. High coverage
 is not evidence of small bias.
 
@@ -200,8 +208,10 @@ fitted predictions fixed, so a fuller account of uncertainty would only strength
 
 - Assignment to either e-mail increased two-week spend, visits and conversions among these customers, and
   the Mens e-mail outperformed the Womens e-mail on all three.
-- When selection depends only on recorded covariates and overlap holds, weighting and doubly robust
-  estimators recover the experimental effect; misspecified outcome regression and caliper matching do not.
+- In these constructed scenarios, where selection depends only on recorded covariates and overlap holds,
+  weighting and doubly robust estimators recover the experimental reference; misspecified outcome regression
+  and caliper matching do not. Success under a known, constructed selection rule does not establish
+  identification in other observational data.
 
 ## What we cannot conclude
 
@@ -257,7 +267,8 @@ make test      # run the test suite
 ```
 
 The results above come from a clean run of commit `0fe84ed` in a fresh clone, and every output matched an
-earlier independent run exactly ([design, item 14](docs/design.md)). Seeds are fixed in the configuration,
+earlier independent run exactly. The history was later rewritten; `0fe84ed` has the same files as `73e57c8`,
+which is the hash on GitHub ([design, item 14](docs/design.md)). Seeds are fixed in the configuration,
 and each result directory records the data checksum, benchmark specification, seed, commit and package
 versions it was produced with.
 

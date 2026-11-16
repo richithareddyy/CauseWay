@@ -718,7 +718,7 @@ def run_propensity_report(paths: DataPaths | None = None) -> ReportOutputs:
 
 
 ESTIMATION_ESTIMATORS = ["naive_difference", "oracle_ipw", "outcome_regression", "aipw", "dml_irm"]
-CROSS_CHECK_DRAWS = 10  # fixed from runtime considerations before any result was seen
+CROSS_CHECK_DRAWS = 10  # set for runtime reasons, not chosen from results
 
 
 def _nuisance_summary(diagnostics: pd.DataFrame) -> pd.DataFrame:
@@ -1027,8 +1027,8 @@ def _heterogeneity_markdown(
     lines = [
         "# Heterogeneous treatment effects and targeting (randomized experiment)",
         "",
-        "Plan: `configs/heterogeneity.toml` (committed before any result). Estimand: ITT effect of "
-        "assignment.",
+        "Plan: `configs/heterogeneity.toml` (committed before this analysis was run). Estimand: ITT effect "
+        "of assignment.",
         "",
         "## 1. Formal test: is there heterogeneity the covariates can predict?",
         "",
@@ -1626,9 +1626,9 @@ def _robustness_markdown(
         "Medians over draws. Γ* is the largest hidden bias at which the matched visit comparison "
         "still rejects; NaN would mean it does not reject even without hidden bias.",
         "",
-        "**Truth check (Scenario C).** The hidden recency's actual partial R² values, the bias they imply "
-        "under the omitted-variable formula, and whether bounds from observed covariates would have "
-        "covered the actual error:",
+        "**Check against the hidden confounder (Scenario C).** The hidden recency's actual partial R² "
+        "values, the bias they imply under the omitted-variable formula, and whether bounds from observed "
+        "covariates would have covered the actual error:",
         "",
         "| Comparison | Outcome | Hidden R²(Y) | Hidden R²(D) | Bias implied by hidden | Actual abs error "
         "| Bound covers error: 1x / 2x / 3x strongest covariate |",

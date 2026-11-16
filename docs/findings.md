@@ -37,7 +37,7 @@ Holm p-values adjust the two co-primary contrasts for multiplicity; randomizatio
 
 ## 2. What happens without randomization
 
-Part II removes the protection of randomization on purpose. Customers are subsampled from each randomized pair with a known selection rule (RCT rejection sampling, Keith et al. 2023), so that high-spending, recent, multichannel and established customers are more likely to appear e-mailed. The full randomized pair still supplies the true answer. Three scenarios, 200 draws each:
+Part II removes the protection of randomization on purpose. Customers are subsampled from each randomized pair with a known selection rule (RCT rejection sampling, Keith et al. 2023), so that high-spending, recent, multichannel and established customers are more likely to appear e-mailed. Each estimate is scored against the difference in means over the full randomized pair. That experimental reference is the exact target of the construction, conditional on the observed trial; as an estimate of the population effect it carries the sampling uncertainty shown in Section 1. Three scenarios, 200 draws each:
 
 - **A**: moderate selection on covariates the analyst observes.
 - **B**: twice as strong, which stresses overlap and produces extreme weights.
@@ -61,7 +61,7 @@ Each flag is a separate test at roughly the 5% level, so among the 48 feasible c
 
 With recency hidden (C), no feasible estimator recovers the benchmark: adjustment cannot remove bias from a variable the analyst does not observe.
 
-The tables below are the estimator comparison for spend in Scenario A. The estimate and interval come from one constructed dataset (draw 0, fixed before any result was seen); bias and coverage summarize all 200 draws. `*` marks a bias larger than twice its Monte Carlo standard error. Every scenario and outcome is in `estimator_table.csv`.
+The tables below are the estimator comparison for spend in Scenario A. The estimate and interval come from one constructed dataset (draw 0, fixed by the frozen specification); bias and coverage summarize all 200 draws. `*` marks a bias larger than twice its Monte Carlo standard error. Every scenario and outcome is in `estimator_table.csv`.
 
 **Mens vs No E-Mail, Scenario A, spend**
 
@@ -120,7 +120,7 @@ Heterogeneity was detected only for Womens vs No E-Mail on visit. Elsewhere the 
 
 **Refutation tests do not detect hidden confounding.** A placebo treatment is rejected in 4% (A) and 4% (C) of draws on average, and adding a random covariate or refitting on 80% subsets barely moves the estimates, in Scenario C just as in A. Yet in C the spend estimates are biased by 18% to 44%. Passing a refutation test is not evidence that no confounder is missing.
 
-**Sensitivity analysis bounds; it does not detect.** The robustness value for visit is 0.091 (A) vs 0.116 (C) for Mens vs No E-Mail and 0.057 (A) vs 0.079 (C) for Womens vs No E-Mail: the estimates look more robust when a confounder is hidden, not less. What sensitivity analysis does do is turn a hypothesis about confounder strength into a bound. Bounds for a confounder one, two or three times as strong as the observed covariate giving the largest bound cover the true visit error in 18%, 90% and 100% of Mens draws in Scenario C.
+**Sensitivity analysis bounds; it does not detect.** The robustness value for visit is 0.091 (A) vs 0.116 (C) for Mens vs No E-Mail and 0.057 (A) vs 0.079 (C) for Womens vs No E-Mail: the estimates look more robust when a confounder is hidden, not less. What sensitivity analysis does do is turn a hypothesis about confounder strength into a bound. Bounds for a confounder one, two or three times as strong as the observed covariate giving the largest bound cover the visit error relative to the experimental reference in 18%, 90% and 100% of Mens draws in Scenario C.
 
 ![Sensitivity summaries in Scenarios A and C](figures/sensitivity_summary.png)
 
@@ -129,7 +129,7 @@ Heterogeneity was detected only for Womens vs No E-Mail on visit. Elsewhere the 
 Confidence intervals describe sampling variability under the stated assumptions. They say nothing about whether the assumptions hold.
 
 - **Part I** intervals are the whole story: randomization secures identification, so the remaining uncertainty is statistical.
-- **Part II, Scenario C**: with recency hidden, the cross-fitted AIPW interval for the visit effect covers the truth in 8% and 12% of draws (Mens, Womens), against 97% and 98% for the oracle. The intervals are centred in the wrong place, and no standard error can show that. For spend the same intervals still cover in 97% and 95% of draws, only because spend is noisy enough to make them wide: high coverage there is not evidence of small bias.
+- **Part II, Scenario C**: with recency hidden, the cross-fitted AIPW interval for the visit effect covers the experimental reference in 8% and 12% of draws (Mens, Womens), against 97% and 98% for the oracle, which is the calibration point because every constructed sample is drawn from the same trial. The intervals are centred in the wrong place, and no standard error can show that. For spend the same intervals still cover in 97% and 95% of draws, only because spend is noisy enough to make them wide: high coverage there is not evidence of small bias.
 
 ## 7. Assumptions
 

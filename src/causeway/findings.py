@@ -330,7 +330,10 @@ def _part_two(r: dict, tables: dict) -> list[str]:
         "Part II removes the protection of randomization on purpose. Customers are subsampled from each "
         "randomized pair with a known selection rule (RCT rejection sampling, Keith et al. 2023), so that "
         "high-spending, recent, multichannel and established customers are more likely to appear e-mailed. "
-        "The full randomized pair still supplies the true answer. Three scenarios, 200 draws each:",
+        "Each estimate is scored against the difference in means over the full randomized pair. That "
+        "experimental reference is the exact target of the construction, conditional on the observed "
+        "trial; as an estimate of the population effect it carries the sampling uncertainty shown in "
+        "Section 1. Three scenarios, 200 draws each:",
         "",
         "- **A**: moderate selection on covariates the analyst observes.",
         "- **B**: twice as strong, which stresses overlap and produces extreme weights.",
@@ -390,7 +393,7 @@ def _part_two(r: dict, tables: dict) -> list[str]:
         ]
     lines += [
         "The tables below are the estimator comparison for spend in Scenario A. The estimate and interval "
-        "come from one constructed dataset (draw 0, fixed before any result was seen); bias and coverage "
+        "come from one constructed dataset (draw 0, fixed by the frozen specification); bias and coverage "
         "summarize all 200 draws. `*` marks a bias larger than twice its Monte Carlo standard error. Every "
         "scenario and outcome is in `estimator_table.csv`.",
         "",
@@ -507,7 +510,8 @@ def _robustness(r: dict) -> list[str]:
         + reading
         + "What sensitivity analysis does do is turn a hypothesis about confounder strength into a bound. "
         "Bounds for a confounder one, two or three times as strong as the observed covariate giving the "
-        f"largest bound cover the true visit error in {covered} of Mens draws in Scenario C.",
+        f"largest bound cover the visit error relative to the experimental reference in {covered} of Mens "
+        "draws in Scenario C.",
         "",
         _figure("robustness/sensitivity_summary.png", "Sensitivity summaries in Scenarios A and C"),
         "",
@@ -533,8 +537,9 @@ def _uncertainty(r: dict) -> list[str]:
         "- **Part I** intervals are the whole story: randomization secures identification, so the remaining "
         "uncertainty is statistical.",
         "- **Part II, Scenario C**: with recency hidden, the cross-fitted AIPW interval for the visit effect "
-        f"covers the truth in {coverage('aipw', 'visit')} of draws (Mens, Womens), against "
-        f"{coverage('oracle_ipw', 'visit')} for the oracle. The intervals are centred in the wrong place, "
+        f"covers the experimental reference in {coverage('aipw', 'visit')} of draws (Mens, Womens), against "
+        f"{coverage('oracle_ipw', 'visit')} for the oracle, which is the calibration point because every "
+        "constructed sample is drawn from the same trial. The intervals are centred in the wrong place, "
         "and no standard error can show that. For spend the same intervals still cover in "
         f"{coverage('aipw', 'spend')} of draws, only because spend is noisy enough to make them wide: high "
         "coverage there is not evidence of small bias.",

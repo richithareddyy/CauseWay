@@ -126,7 +126,11 @@ def test_dml_hand_matches_doubleml_including_extreme_propensities():
     x, t, y, _ = simulate(3000, 6, strength=4.0)  # strong selection: fitted propensities fall below 0.01
     folds = cross_fit_folds(len(t), 5, 11)
     hand = hand_dml(y, t, x, folds, seed=11)
-    library, predictions = doubleml_irm(y, t, x, folds, seed=11)
+    # With unclipped, extreme propensities DoubleML's sensitivity element nu2 comes out non-positive and
+    # it falls back to the squared Riesz representer. nu2 only feeds DoubleML's own sensitivity analysis,
+    # which is never used here; the estimate and SE below must be unaffected.
+    with pytest.warns(UserWarning, match="nu2 for _d is not positive"):
+        library, predictions = doubleml_irm(y, t, x, folds, seed=11)
     assert predictions["ml_m"].min() < 0.01  # DoubleML's default clipping would have changed the answer
     assert library.estimate == pytest.approx(hand.estimates()[0].estimate, abs=1e-10)
     np.testing.assert_allclose(predictions["ml_m"], hand.propensity)

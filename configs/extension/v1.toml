@@ -1,0 +1,184 @@
+# Causeway validation extension, version 1.
+#
+# A separately versioned check of the Part II conclusions on a second randomized dataset
+# (Criteo Uplift v2.1), with predeclared linear, nonlinear, poor-overlap and hidden-confounder
+# selection. It does not modify configs/benchmark/v1.toml or any original result.
+#
+# Frozen after the outcome-blind gate (configs/extension/criteo_gate.toml) and before any outcome
+# column of the dataset was read. What was known about outcomes at this point: only the overall
+# visit (0.046992) and conversion (0.00292) rates and the relative uplifts published by Criteo.
+# Commit order records when this file was written; it cannot by itself prove what was inspected.
+
+[meta]
+version = "1.0.0"
+frozen_on = "2026-11-16"
+status = "frozen"
+design_section = "docs/design.md, Section 9"
+
+[data]
+gate = "configs/extension/criteo_gate.toml"
+pool_rows = 200000
+pool_seed = 20181015
+# Observed at the gate (features and treatment only): out-of-fold AUC 0.508 (0.509 on 1M rows);
+# largest |SMD| 0.050 (f3), against tolerances of 0.52 and 0.05. The imbalance is small but not
+# noise, so a covariate-adjusted reference is reported next to the difference in means.
+gate_out_of_fold_auc = 0.5084
+gate_max_abs_smd = 0.0500
+
+[outcomes]
+primary = "visit"
+secondary = ["conversion"]
+excluded = ["exposure"]            # post-treatment
+
+[analyst]
+covariates = ["f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11"]
+encoding = "raw dense floats; linear models standardize internally"
+
+[randomness]
+base_seed = 20181016
+n_draws = 200
+# numpy.random.SeedSequence(entropy=base_seed, spawn_key=(draw, stream)): stream 0 = selection
+# uniforms (shared by every scenario, so H retains exactly the units A retains), 1 = estimators.
+fixed_display_draw = 0
+
+[selection]
+method = "rct_rejection_sampling"
+reference = "Keith, Feldman, Jurgens, Bragg & Bhattacharya (2023), TMLR, arXiv:2307.15176"
+# logit e*(x) = alpha + k * index(x) / sd(index), z-scores and quantiles over the pool (ddof = 0).
+# alpha is solved by bisection so that the pool mean of e*(x) equals the pool treatment share.
+target_mean_propensity = "pool treatment share"
+acceptance_rule = "U <= p_star(t | x) / (arm_share(t) * M), M = max over the pool"
+
+[selection.indices]
+linear = "0.75 z(f0) - 0.75 z(f6) + 0.5 z(f9) + 0.5 z(f2)"
+nonlinear = "1.0 * 1{f0 >= median(f0)} - 0.5 z(f6)^2 + 0.6 z(f9) * 1{f2 > median(f2)} + 0.4 |z(f3)|"
+
+[scenarios.A]
+label = "Linear selection on observed features"
+index = "linear"
+k = 1.0
+hidden = []
+
+[scenarios.N]
+label = "Nonlinear selection on observed features"
+index = "nonlinear"
+k = 1.5
+hidden = []
+
+[scenarios.P]
+label = "Poor overlap"
+index = "linear"
+k = 2.0
+hidden = []
+
+[scenarios.H]
+label = "Hidden confounder"
+index = "linear"
+k = 1.0
+hidden = ["f6"]                     # tied largest selection coefficient; analogous to hidden recency
+
+# Covariate-only calibration (expected values over the pool; no outcomes):
+#   A: e* 1st-99th pct 0.60-0.99, 1.6% of pool above 0.99, largest arm SMD 0.66, ~59k retained
+#   N: e* 0.06-1.00, 3.0% above 0.99, largest SMD 0.61, ~30k retained
+#   P: e* 0.37-1.00, 17% above 0.99, largest SMD 1.03, ~37k retained
+
+# References. Each is computed on the full pool and is the exact target of the construction
+# conditional on the pool; as an estimate of a population effect each has its own standard error.
+[references.ATE]
+definition = "difference in means over the pool"
+role = "primary reference for ATE estimators"
+[references.ATE_adjusted]
+definition = "Lin (2013) regression-adjusted difference in means over the pool, HC2 standard error"
+role = "secondary; its gap from ATE measures how much the small pool imbalance matters"
+[references.ATT]
+definition = "difference in Hajek means over the pool, each unit weighted by e*(x_i) of the scenario"
+role = "reference for ATT estimators"
+[references.ATE_trimmed]
+definition = "difference in means over pool units with e*(x) in [0.05, 0.95]"
+bounds = [0.05, 0.95]
+role = "reference for trimmed estimators; the trimmed population is defined by e*, not by an estimate"
+
+[estimation]
+ci_level = 0.95
+cross_fit_folds = 5
+
+# name, estimand, reference
+[[estimators]]
+name = "naive_difference"
+estimand = "unadjusted association"
+reference = "ATE"
+[[estimators]]
+name = "oracle_ipw"
+estimand = "ATE"
+reference = "ATE"
+note = "Hajek weights from the true e*; checks the construction"
+[[estimators]]
+name = "oracle_ipw_att"
+estimand = "ATT"
+reference = "ATT"
+[[estimators]]
+name = "oracle_trimmed"
+estimand = "ATE_trimmed"
+reference = "ATE_trimmed"
+note = "oracle IPW over retained units with e* in the bounds"
+[[estimators]]
+name = "ipw_ate"
+estimand = "ATE"
+reference = "ATE"
+propensity = "logistic regression on the analyst covariates (main effects)"
+[[estimators]]
+name = "ipw_att"
+estimand = "ATT"
+reference = "ATT"
+[[estimators]]
+name = "outcome_regression"
+estimand = "ATE"
+reference = "ATE"
+model = "OLS per arm on the analyst covariates (g-computation)"
+[[estimators]]
+name = "aipw"
+estimand = "ATE"
+reference = "ATE"
+model = "cross-fitted, logistic propensity and per-arm OLS, no clipping"
+[[estimators]]
+name = "aipw_trimmed"
+estimand = "ATE_trimmed"
+reference = "ATE_trimmed"
+model = "cross-fitted AIPW scores averaged over units whose estimated propensity is in the bounds"
+note = "the estimated set differs from the e*-defined target population; that mismatch is part of its error"
+[[estimators]]
+name = "dml_irm"
+estimand = "ATE"
+reference = "ATE"
+model = "DoubleML IRM, gradient boosting nuisances, no clipping, the draw's folds"
+[[estimators]]
+name = "dml_irm_att"
+estimand = "ATT"
+reference = "ATT"
+model = "DoubleML IRM with score ATTE, same learners and folds"
+
+[cross_checks]
+draws = 10                          # first 10 draws of each scenario
+checks = [
+  "hand-written cross-fitted AIPW vs EconML LinearDRLearner with the same models and folds",
+  "hand-written orthogonal DML score vs DoubleML IRM with the same learners and folds",
+]
+
+[metrics]
+per_estimator = ["bias", "Monte Carlo SE of the bias", "RMSE", "empirical SD", "mean SE / empirical SD",
+                 "interval coverage of the reference", "failure rate"]
+failure = "non-finite estimate, or non-finite SE for an estimator that reports one"
+calibration = "coverage is read against the oracle's coverage, since every draw comes from the same pool"
+diagnostics = ["largest |SMD| between arms before and after IPW weighting", "Kish effective sample size",
+               "largest weight relative to the arm mean", "share of estimated propensities outside [0.01, 0.99]",
+               "DoubleML nonpositive-nu2 fallbacks per fit (recorded, not suppressed)"]
+recovers = "|bias| <= 2 Monte Carlo SE; each cell is a separate ~5% test, so isolated flags are weak evidence"
+
+[expectations]
+# Written before any outcome was read, to be checked against what happens.
+oracle = "unbiased in every cell"
+A = "IPW, AIPW and DML unbiased; outcome regression may be biased if the linear model is misspecified"
+N = "linear-propensity IPW and AIPW may be biased (misspecified propensity; AIPW protected only if its outcome model is right); DML expected to do best"
+P = "unbiased estimators remain so in expectation but with larger variance and worse coverage; weights extreme"
+H = "bias for adjusted estimators only to the extent that f6 predicts visits given the other features, which is unknown beforehand"
+generalization = "success under a known constructed selection rule does not establish identification in other observational data"

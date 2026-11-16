@@ -675,12 +675,15 @@ def build_findings_report(paths: DataPaths | None = None) -> ReportOutputs:
     return ReportOutputs(tables, figures, report_path)
 
 
+EXTENSION_FIGURES = ["extension/extension_recovery.png"]
+
+
 def relink(markdown: str) -> str:
     """Point figure links at docs/figures; figures that are not published become plain paths."""
 
     def replace(match: re.Match) -> str:
         bang, text, path = match.groups()
-        if path in PUBLISHED_FIGURES:
+        if path in PUBLISHED_FIGURES or path in EXTENSION_FIGURES:
             return f"{bang}[{text}](figures/{Path(path).name})"
         return f"`reports/figures/{path}`"
 
@@ -706,4 +709,21 @@ def publish_docs(paths: DataPaths | None = None, docs: Path = PROJECT_ROOT / "do
     title, _, body = report.read_text().partition("\n")
     target = docs / "findings.md"
     target.write_text(f"{title}\n\n{note}{relink(body.lstrip())}")
-    return [target, *written]
+    written.insert(0, target)
+
+    # The validation extension is published separately, and only when it has been run.
+    extension = paths.results("extension") / "extension_report.md"
+    if extension.exists():
+        for path in EXTENSION_FIGURES:
+            target = docs / "figures" / Path(path).name
+            shutil.copyfile(paths.figures(path), target)
+            written.append(target)
+        note = (
+            "> Copied from `reports/results/extension/extension_report.md` by `make docs`. Result tables are "
+            "produced locally by `make extension`.\n\n"
+        )
+        title, _, body = extension.read_text().partition("\n")
+        target = docs / "extension.md"
+        target.write_text(f"{title}\n\n{note}{relink(body.lstrip())}")
+        written.append(target)
+    return written

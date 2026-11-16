@@ -481,3 +481,14 @@ Protocol: [`configs/extension/v1.toml`](../configs/extension/v1.toml), frozen be
 **Targets.** ATE (difference in means over the pool), ATT (e*-weighted Hájek difference), and a trimmed ATE over units with e*(x) in [0.05, 0.95], each with its own reference and standard error. Feasible trimmed estimators select units by an estimated propensity, so their set differs from the e*-defined population; that mismatch is counted as part of their error, not hidden.
 
 **Not carried over.** 1:1 matching without replacement is omitted: with about 5.7 treated users per control, most treated users cannot be matched, so the estimate would describe an arbitrary subpopulation. Heterogeneity and targeting are not re-run; the original negative targeting result stands as reported.
+
+**Results (run of commit `8a24350`; post-hoc analyses at `cdaaba9`).** Details and every table: [extension report](extension.md).
+
+- Oracle IPW for the ATE, ATT and trimmed ATE shows no bias beyond twice its Monte Carlo SE in any of 24 cells.
+- The predeclared ATE references disagree on visit: the difference in means is 1.186 pp and the Lin-adjusted reference 0.886 pp, a gap of 2.5 SE. Post hoc, linear AIPW (0.887 pp) and DML (0.827 pp) on the full pool agree with the adjusted value. The gate's tolerances (AUC < 0.52, |SMD| < 0.05) were too loose to rule out an imbalance that matters for a small effect; this is a lesson about the gate, recorded rather than adjusted after the fact. Against the difference in means every adjusted estimator looks biased in scenario A; against the adjusted reference IPW and AIPW recover it.
+- Nonlinear selection: linear-propensity IPW (+107% against the adjusted reference) and AIPW (−40%) fail; DML is closer (−12%).
+- Hidden f6 (post hoc, paired by draw against scenario A): every adjusted visit estimate shifts upward beyond Monte Carlo error, from +7% (outcome regression) to +29% (AIPW) of the difference in means.
+- Poor overlap: the oracle's own visit interval covers only 70% of the time; nu2 fallbacks concentrate there (74 of 800 fits), and DoubleML refused 8 of 3,200 fits across all scenarios because boosted predictions for a binary outcome came out exactly 0 or 1. Each refused fit counts as a failure of that estimator only.
+- Conversion (about 0.3%) is too rare for the extension to say much about it.
+- Matching was not carried over, and heterogeneity and targeting were not rerun; the original negative targeting result stands.
+

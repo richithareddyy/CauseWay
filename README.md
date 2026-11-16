@@ -14,6 +14,8 @@ Python 3.12, pandas, scikit-learn, EconML, DoubleML.
 
 ![Experimental effects with 95% intervals](docs/figures/itt_effects.png)
 
+A separately versioned [validation extension](docs/extension.md) repeats the selection experiments on a second randomized trial (Criteo Uplift v2.1). The construction checks out and hiding a selection variable again biases every adjusted estimate, but small treatment–feature imbalance in that released file makes its unadjusted reference for visits itself uncertain.
+
 The [findings report](docs/findings.md) contains intervals, estimator comparisons, sensitivity checks, and qualifications. These findings concern this experiment and the constructed selection scenarios, not a general ranking of causal methods.
 
 ## Reproduce

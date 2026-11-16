@@ -204,6 +204,34 @@ fitted predictions fixed, so a fuller account of uncertainty would only strength
 - **Hidden confounding:** see above. Refutation tests check estimator behaviour, not the absence of a
   confounder.
 
+## Validation extension v1: a second randomized trial
+
+A separately versioned extension repeats the Part II checks on the Criteo Uplift Prediction Dataset v2.1
+(Diemert et al., 2018), a pool of randomized advertising tests, with linear, nonlinear, poor-overlap and
+hidden-feature selection. Its protocol ([`configs/extension/v1.toml`](configs/extension/v1.toml)) was frozen
+after an outcome-blind balance check and before any outcome column was read. The original study above is
+unchanged. Full results: [extension report](docs/extension.md).
+
+![Extension recovery by scenario](docs/figures/extension_recovery.png)
+
+- **The construction checks out.** The oracle estimators show no bias beyond Monte Carlo error in any of
+  the 24 cells.
+- **The experimental reference itself is in question for visits.** Treatment in Criteo's released file is
+  slightly predictable from the features (out-of-fold AUC 0.508). On the full 200,000-user pool, adjusting
+  for the features lowers the visit effect from 1.19 to 0.89 pp (linear) or 0.83 pp (DML), 2.5–2.9 SE.
+  Adjusted estimators therefore look about 18–32% biased against the unadjusted reference in the linear
+  scenario. Against the adjusted reference, weighting and AIPW recover the effect.
+- **Nonlinear selection breaks linear propensity models.** Linear IPW and AIPW are badly biased against
+  either reference, while DML with boosted nuisances comes closer (−12% against the adjusted reference).
+- **The hidden-confounder failure replicates without needing a reference.** The hidden-feature scenario
+  keeps exactly the same users as the linear one, and hiding the feature raises every adjusted visit estimate
+  by 7% (outcome regression) to 29% (AIPW) of the experimental effect, beyond Monte Carlo error.
+- **DoubleML's nonpositive-nu2 fallbacks** (Section 7, item 16 of the design record) recur here, mostly
+  under poor overlap; they do not affect the estimates.
+
+The reference comparisons and the paired hidden-feature analysis in the extension report are labelled
+post hoc where they were added after the frozen run was read.
+
 ## What we can conclude
 
 - Assignment to either e-mail increased two-week spend, visits and conversions among these customers, and

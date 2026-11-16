@@ -23,6 +23,8 @@ def test_readme_and_docs_links_resolve():
 def test_published_figures_match_the_code():
     published = {Path(p).name for p in findings.PUBLISHED_FIGURES}
     assert len(published) == len(findings.PUBLISHED_FIGURES), "published figure names must be unique"
+    if (PROJECT_ROOT / "docs" / "extension.md").exists():
+        published |= {Path(p).name for p in findings.EXTENSION_FIGURES}
     assert {p.name for p in (PROJECT_ROOT / "docs" / "figures").glob("*.png")} == published
     readme_images = re.findall(
         r"!\[[^\]]*\]\(docs/figures/([^)]+)\)", (PROJECT_ROOT / "README.md").read_text()

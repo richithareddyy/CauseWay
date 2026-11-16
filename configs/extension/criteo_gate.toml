@@ -1,0 +1,36 @@
+# Suitability gate for the validation extension's second randomized dataset.
+# Written before any of these statistics was computed. Every check reads only the
+# feature and treatment columns; no outcome column is read until the extension
+# protocol (configs/extension/v1.toml) is frozen.
+
+[source]
+name = "Criteo Uplift Prediction Dataset v2.1"
+publisher = "Criteo AI Lab"
+repository = "https://huggingface.co/datasets/criteo/criteo-uplift"
+revision = "2424920019e49d52d72c13ac1143ec5d53af276b"
+file = "criteo-research-uplift-v2.1.csv.gz"
+sha256 = "2716e1bf0fd157a93b5bf86924d9088419dfbac2022c6cd90030220634f616dc"
+bytes = 311422618
+license = "CC BY-NC-SA 4.0 (Criteo Data Terms of Use); downloaded for non-commercial research, never redistributed"
+citation = "Diemert, E., Betlei, A., Renaudin, C., & Amini, M.-R. (2018). A Large Scale Benchmark for Uplift Modeling. AdKDD & TargetAd Workshop, KDD 2018."
+
+[schema]
+rows = 13979592
+features = ["f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11"]
+treatment = "treatment"
+outcomes = ["visit", "conversion"]
+post_treatment = ["exposure"]    # only treated users can be exposed; never a covariate
+
+[pool]
+# The extension's "trial": a uniform random subsample of the released rows, which keeps
+# treatment independent of the features if the full file has that property.
+rows = 200000
+seed = 20181015
+
+[gate]
+# Practical tolerances, not significance tests: at this sample size any dependence is "significant".
+classifier = "HistGradientBoostingClassifier, default hyperparameters, 5-fold out-of-fold predictions on the pool"
+max_out_of_fold_auc = 0.52
+max_abs_smd = 0.05
+require_no_missing = true
+if_failed = "do not use this dataset; run only the predeclared Hillstrom mechanisms"

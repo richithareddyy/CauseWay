@@ -118,7 +118,7 @@ Heterogeneity was detected only for Womens vs No E-Mail on visit. Elsewhere the 
 
 ## 5. Robustness and sensitivity
 
-**Refutation tests do not detect hidden confounding.** A placebo treatment is rejected in 4% (A) and 4% (C) of draws on average, and adding a random covariate or refitting on 80% subsets barely moves the estimates, in Scenario C just as in A. Yet in C the spend estimates are biased by 18% to 44%. Passing a refutation test is not evidence that no confounder is missing.
+**Refutation tests do not detect hidden confounding.** A placebo treatment is rejected in 4% (A) and 4% (C) of draws on average, and adding a random covariate or refitting on 80% subsets barely moves the estimates, in Scenario C just as in A. Yet in the same first 50 draws of Scenario C, the AIPW (linear, cross-fitted) and IPW (ATE) spend estimates are biased by 18% to 44%. Over all draws, every adjusted estimator except matching is biased by 14% to 47% on spend (Section 3). Passing a refutation test is not evidence that no confounder is missing.
 
 **Sensitivity analysis bounds; it does not detect.** The robustness value for visit is 0.091 (A) vs 0.116 (C) for Mens vs No E-Mail and 0.057 (A) vs 0.079 (C) for Womens vs No E-Mail: the estimates look more robust when a confounder is hidden, not less. What sensitivity analysis does do is turn a hypothesis about confounder strength into a bound. Bounds for a confounder one, two or three times as strong as the observed covariate giving the largest bound cover the visit error relative to the experimental reference in 18%, 90% and 100% of Mens draws in Scenario C.
 

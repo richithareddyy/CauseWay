@@ -486,6 +486,15 @@ def _robustness(r: dict) -> list[str]:
     bias_c = refutation.loc[
         (refutation["scenario"] == "C") & (refutation["outcome"] == "spend"), "original_bias_pct"
     ]
+    refuted_names = " and ".join(viz.ESTIMATOR_DISPLAY[e] for e in sorted(refutation["estimator"].unique()))
+    refutation_draws = int(refutation["n_draws"].iloc[0])
+    perf = r["performance"]
+    adjusted_c = perf.loc[
+        (perf["scenario"] == "C")
+        & (perf["outcome"] == "spend")
+        & perf["estimator"].isin(["outcome_regression", "ipw_ate", "ipw_att", "aipw", "dml_irm"]),
+        "bias_pct",
+    ]
     sens = r["sensitivity"].set_index(["comparison", "scenario"])
     rv = {c: (sens.loc[(c, "A"), "visit_rv_q1"], sens.loc[(c, "C"), "visit_rv_q1"]) for c in CONTRASTS}
     reading = (
@@ -502,7 +511,10 @@ def _robustness(r: dict) -> list[str]:
         f"**Refutation tests do not detect hidden confounding.** A placebo treatment is rejected in "
         f"{placebo['A']:.0%} (A) and {placebo['C']:.0%} (C) of draws on average, and adding a random "
         "covariate or refitting on 80% subsets barely moves the estimates, in Scenario C just as in A. Yet "
-        f"in C the spend estimates are biased by {bias_c.abs().min():.0%} to {bias_c.abs().max():.0%}. "
+        f"in the same first {refutation_draws} draws of Scenario C, the {refuted_names} spend estimates "
+        f"are biased by {bias_c.abs().min():.0%} to {bias_c.abs().max():.0%}. Over all draws, every adjusted "
+        f"estimator except matching is biased by {adjusted_c.abs().min():.0%} to "
+        f"{adjusted_c.abs().max():.0%} on spend (Section 3). "
         "Passing a refutation test is not evidence that no confounder is missing.",
         "",
         "**Sensitivity analysis bounds; it does not detect.** The robustness value for visit is "

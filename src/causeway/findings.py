@@ -394,8 +394,8 @@ def _part_two(r: dict, tables: dict) -> list[str]:
     lines += [
         "The tables below are the estimator comparison for spend in Scenario A. The estimate and interval "
         "come from one constructed dataset (draw 0, fixed by the frozen specification); bias and coverage "
-        "summarize all 200 draws. `*` marks a bias larger than twice its Monte Carlo standard error. Every "
-        "scenario and outcome is in `estimator_table.csv`.",
+        "summarize all 200 draws. `*` marks a bias larger than twice its Monte Carlo standard error. "
+        "`estimator_table.csv` covers every scenario for spend and visit.",
         "",
     ]
     table = tables["estimator_table"]

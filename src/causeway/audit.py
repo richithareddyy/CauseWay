@@ -504,6 +504,11 @@ def findings_claims(e: Evidence) -> list[Claim]:
         for cells_ in estimator_rows(e, comparison, "A", "spend"):
             add(row(*cells_), "comparison/display_draw.csv; comparison/performance.csv")
 
+    covered = t["estimator_table"]
+    require("estimator table scenarios", set(covered["scenario"]) == set(benchmark["scenarios"]))
+    listed = listing(list(dict.fromkeys(covered["outcome"])))
+    add(f"`estimator_table.csv` covers every scenario for {listed}.", "findings/estimator_table.csv")
+
     # 4. Heterogeneity and targeting
     splits = config["heterogeneity"]["blp"]["n_splits"]
     add(

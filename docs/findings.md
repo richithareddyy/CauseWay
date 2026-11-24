@@ -61,7 +61,7 @@ Each flag is a separate test at roughly the 5% level, so among the 48 feasible c
 
 With recency hidden (C), no feasible estimator recovers the benchmark: adjustment cannot remove bias from a variable the analyst does not observe.
 
-The tables below are the estimator comparison for spend in Scenario A. The estimate and interval come from one constructed dataset (draw 0, fixed by the frozen specification); bias and coverage summarize all 200 draws. `*` marks a bias larger than twice its Monte Carlo standard error. Every scenario and outcome is in `estimator_table.csv`.
+The tables below are the estimator comparison for spend in Scenario A. The estimate and interval come from one constructed dataset (draw 0, fixed by the frozen specification); bias and coverage summarize all 200 draws. `*` marks a bias larger than twice its Monte Carlo standard error. `estimator_table.csv` covers every scenario for spend and visit.
 
 **Mens vs No E-Mail, Scenario A, spend**
 

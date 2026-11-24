@@ -32,6 +32,8 @@ make test
 
 The aggregate tables behind the numbers here and in the findings report are committed under [`reports/results/`](reports/results); after `make setup`, `make verify` checks each number against the committed files without rerunning anything.
 
+Those results are stamped with commit `0fe84ed`, a hash from before the public history was rewritten. Its files are identical to those at `73e57c8`, so the results come from the code there.
+
 The full analysis took about 75 minutes on eight cores in the documented run. Data downloads are checksum-verified; configurations fix the benchmark design and random seeds. Generated reports record the data, configuration, and environment used.
 
 The comparison includes matching, weighting, regression, AIPW, and double machine learning (DML). The AIPW and DML calculations are implemented here and checked against EconML and DoubleML. Analysis plans were committed before the corresponding analyses were run; commit order records that sequence but cannot prove what had been inspected. The targeting policies are evaluated on data, not deployed campaigns.

@@ -653,6 +653,9 @@ def readme_claims(e: Evidence) -> list[Claim]:
     criteo = e.configs["criteo"]["source"]["name"]
     require("extension dataset", criteo.startswith("Criteo Uplift"))
     version = re.search(r"v\d+\.\d+", criteo).group(0)
+    stamp = e.provenance["experiment"]["code"]["commit"][:7]
+    public = re.search(rf"`{stamp}` has exactly the same files as `([0-9a-f]{{7}})`", e.design)
+    require("published commit recorded", public is not None)
     terms = re.match(r"CC BY-NC-SA \d\.\d", e.configs["criteo"]["source"]["license"])
     require("extension data terms", terms is not None)
     hillstrom = e.configs["data"]["dataset"]
@@ -681,6 +684,11 @@ def readme_claims(e: Evidence) -> list[Claim]:
         Claim(f"![Experimental effects with {level} intervals]", "configs/experiment.toml"),
         Claim(f"(Criteo Uplift {version})", "configs/extension/criteo_gate.toml"),
         Claim(f"with Python {python} installed:", "pyproject.toml"),
+        Claim(f"Those results are stamped with commit `{stamp}`,", "provenance.json"),
+        Claim(
+            f"Its files are identical to those at `{public.group(1)}`,",
+            "docs/design.md, Section 7 item 16 (a recorded statement; the older commit is not public)",
+        ),
         Claim(f"([Hillstrom, {year}]({hillstrom['documentation_url']}))", "configs/data.toml"),
         Claim(
             f"**Criteo Uplift {version}** ([Criteo AI Lab]({e.configs['criteo']['source']['repository']}))",

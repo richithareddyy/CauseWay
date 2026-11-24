@@ -1,4 +1,4 @@
-# Causeway validation extension v1: Criteo Uplift v2.1
+# CauseWay validation extension v1: Criteo Uplift v2.1
 
 > Copied from `reports/results/extension/extension_report.md` by `make docs`. Result tables are produced locally by `make extension`.
 

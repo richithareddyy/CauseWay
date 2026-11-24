@@ -628,7 +628,7 @@ def _provenance(r: dict) -> list[str]:
 def findings_markdown(results: dict, tables: dict[str, pd.DataFrame]) -> str:
     estimand = results["summary"]["plan"]["meta"]["estimand"]
     lines = [
-        "# Causeway: findings",
+        "# CauseWay: findings",
         "",
         "Does assigning a customer to a marketing e-mail make them spend more, or are the customers who get "
         "promotions simply the ones who would have bought anyway? This report gathers the answers from every "

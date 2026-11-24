@@ -1,4 +1,4 @@
-# Causeway: findings
+# CauseWay: findings
 
 > Copied from `reports/results/findings/findings_report.md` by `make docs`. Figures marked as paths and every result table are produced locally by `make analysis`. The aggregate tables behind these numbers are committed under `reports/results/`, and `make verify` checks each number against them.
 

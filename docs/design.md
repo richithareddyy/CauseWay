@@ -1,4 +1,4 @@
-# Causeway: design record
+# CauseWay: design record
 
 **Status:** Sections 1–6 are the dataset verification and causal design approved at Milestone 1 (2026-10-09), written before any estimator was implemented. The decisions from that review are in Section 5, and the observational benchmark is frozen as v1 (Section 6). Section 7 records what each later milestone found and decided, through the final audit. Results are in [the findings report](findings.md). Every number in Section 1 is printed by `scripts/audit_raw_data.py`, run on the original source file.
 
@@ -63,7 +63,7 @@ The counts are consistent with equal-probability assignment: χ²(2) = 0.20, p =
 | `newbie` | 1 if a new customer in the past twelve months | 32,144 ones |
 | `channel` | Channels purchased from in the past year | Phone / Web / Multichannel |
 
-The data contain no tenure beyond `newbie`, no purchase frequency, and no demographics (`zip_code` is a geographic urbanicity class, not a personal attribute). Causeway will not construct or impute any of these.
+The data contain no tenure beyond `newbie`, no purchase frequency, and no demographics (`zip_code` is a geographic urbanicity class, not a personal attribute). CauseWay will not construct or impute any of these.
 
 ### 1.7 Treatment assignment mechanism
 
@@ -85,7 +85,7 @@ The covariates describe the twelve months before the campaign; the outcomes cove
 
 ### 1.10 Access and licensing
 
-Neither the blog post nor the file states a license or terms of use. The dataset is redistributed by several open-source libraries (scikit-uplift, TensorFlow Datasets, causeinfer, pyuplift), whose licenses cover their code, not the data. Causeway therefore:
+Neither the blog post nor the file states a license or terms of use. The dataset is redistributed by several open-source libraries (scikit-uplift, TensorFlow Datasets, causeinfer, pyuplift), whose licenses cover their code, not the data. CauseWay therefore:
 
 - does **not** commit the data to the repository,
 - downloads it at build time (`make data`) from the original MineThatData URL and verifies the SHA-256 above, falling back to the scikit-uplift mirror (with its MD5 verified) only if the original is unavailable,
@@ -97,8 +97,8 @@ Neither the blog post nor the file states a license or terms of use. The dataset
 |---|---|
 | Original MineThatData CSV | Reference copy (CRLF line endings, integers written as `0`). |
 | scikit-uplift mirror (`hillstorm_no_indices.csv.gz`, MD5 `a68a81291f53a14f4e29002629803ba3`, matches the checksum in the scikit-uplift source) | Same header and the same 64,000 rows in the same order. **Numerically identical on all 64,000 rows.** Text differs only in formatting (LF endings, `spend` written as `0.0`), which explains the different byte counts (4,028,958 vs 3,964,977). It preserves the `Surburban` spelling. |
-| TensorFlow Datasets `hillstrom` | 64,000 examples with the same 12 features. Its catalog citation (`author={ENTRY, WINNING}`) is malformed, so Causeway cites the original blog post instead. |
-| Common secondary descriptions | Some write-ups name the treatment column "treatment"; the original column is `segment`. Some uplift tutorials collapse the two e-mail arms into one binary treatment; Causeway does not (Section 2.2). |
+| TensorFlow Datasets `hillstrom` | 64,000 examples with the same 12 features. Its catalog citation (`author={ENTRY, WINNING}`) is malformed, so CauseWay cites the original blog post instead. |
+| Common secondary descriptions | Some write-ups name the treatment column "treatment"; the original column is `segment`. Some uplift tutorials collapse the two e-mail arms into one binary treatment; CauseWay does not (Section 2.2). |
 
 **Integrity-check outcome rates** (descriptive only; the formal analysis is Milestone 3):
 
@@ -186,7 +186,7 @@ Propensity models, matching and weighting are **not** used to identify the Part 
    where P̂(T = t) is the arm share in the pair.
 3. Draw U_i ~ Uniform(0, 1) and keep unit *i* if U_i ≤ a_i.
 
-In the retained sample, P(T = 1 | X) = e*(X), and the covariate distribution P(X) is unchanged in expectation. Keith et al. prove that this preserves identification. They also show that the earlier OSRCT sampler (Gentzel, Pruthi and Jensen, 2021, Algorithm 2) changes P(X) unless the trial's treatment share is exactly 0.5, and that oracle estimators are then biased. Each Hillstrom pair has a share of ~0.50, so the two samplers would nearly coincide here. Causeway uses rejection sampling because its validity does not depend on that coincidence.
+In the retained sample, P(T = 1 | X) = e*(X), and the covariate distribution P(X) is unchanged in expectation. Keith et al. prove that this preserves identification. They also show that the earlier OSRCT sampler (Gentzel, Pruthi and Jensen, 2021, Algorithm 2) changes P(X) unless the trial's treatment share is exactly 0.5, and that oracle estimators are then biased. Each Hillstrom pair has a share of ~0.50, so the two samplers would nearly coincide here. CauseWay uses rejection sampling because its validity does not depend on that coincidence.
 
 **Pre-specified scenarios** (all defined before any observational estimate is computed):
 
@@ -217,8 +217,8 @@ Matching estimates are compared with the ATT benchmark, and IPW, AIPW, DML and r
 **Relation to prior work:**
 
 - LaLonde (1986) compared experimental estimates from the National Supported Work Demonstration with nonexperimental estimates built from comparison groups drawn from survey data. There, selection was real and unknown.
-- In Causeway, selection is on observed covariates **by construction**. Part II therefore tests estimator mechanics (finite-sample behaviour, model misspecification, overlap) under a *true* unconfoundedness assumption. It does not test whether real observational marketing data satisfy that assumption. Scenario C is the only place where the assumption is deliberately broken.
-- Causeway cites LaLonde as the origin of the within-study comparison idea, and Gentzel et al. (2021) and Keith et al. (2023) as the direct methodological basis. It does **not** claim to replicate LaLonde's design.
+- In CauseWay, selection is on observed covariates **by construction**. Part II therefore tests estimator mechanics (finite-sample behaviour, model misspecification, overlap) under a *true* unconfoundedness assumption. It does not test whether real observational marketing data satisfy that assumption. Scenario C is the only place where the assumption is deliberately broken.
+- CauseWay cites LaLonde as the origin of the within-study comparison idea, and Gentzel et al. (2021) and Keith et al. (2023) as the direct methodological basis. It does **not** claim to replicate LaLonde's design.
 
 ### 2.9 Confounders intentionally used in benchmark selection
 
@@ -447,7 +447,7 @@ These are recorded for the later milestones. None of them changes the frozen ben
 16. **Post-release review (2026-11-16).**
    - **Wording.** Reports and guides described the full-pair difference in means as "the true answer". It is the exact target of the construction conditional on the observed trial, and an estimate of the population effect with the uncertainty reported in Part I. The text now says "experimental reference". The benchmark definition is unchanged.
    - **History rewrite.** The public history was rewritten after the clean run. The clean-run commit `0fe84ed` has exactly the same files as `73e57c8` in the rewritten history; the result stamps keep the hash they were produced with.
-   - **DoubleML nonpositive-nu2 fallbacks.** DoubleML estimates its sensitivity element nu2 as the mean of 2(1/m + 1/(1 − m)) − (d/m − (1 − d)/(1 − m))², which is positive in expectation but can go negative when a few observations have extreme estimated propensities and the less likely treatment. It then recomputes nu2 from the squared Riesz representer and warns. nu2 enters only DoubleML's own sensitivity analysis, which Causeway never calls; the estimate and SE come from the score alone. Clipping is disabled deliberately (Section 7, item 7), which lets extreme propensities through.
+   - **DoubleML nonpositive-nu2 fallbacks.** DoubleML estimates its sensitivity element nu2 as the mean of 2(1/m + 1/(1 − m)) − (d/m − (1 − d)/(1 − m))², which is positive in expectation but can go negative when a few observations have extreme estimated propensities and the less likely treatment. It then recomputes nu2 from the squared Riesz representer and warns. nu2 enters only DoubleML's own sensitivity analysis, which CauseWay never calls; the estimate and SE come from the score alone. Clipping is disabled deliberately (Section 7, item 7), which lets extreme propensities through.
      - In the test suite all 13 warnings come from `tests/test_estimators.py`: one from a test built with extreme propensities, which now asserts the warning explicitly, and twelve from a small synthetic study fixture.
      - In the study itself, rerunning every DoubleML fit with warnings recorded reproduced all 3,600 saved estimates and SEs to 4e-16 and found 18 fallbacks in 6 of 1,200 samples (each sample's three outcome fits share one propensity model), all in Womens vs No E-Mail, Scenario B, the strong-selection scenario. No other warning occurred. No reported number depends on nu2.
 

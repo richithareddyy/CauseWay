@@ -48,7 +48,7 @@ def test_relink_points_published_figures_at_docs_and_keeps_others_as_paths():
 def test_publish_docs_copies_the_report_and_figures(paths, tmp_path):
     report = paths.results("findings") / "findings_report.md"
     report.parent.mkdir(parents=True)
-    report.write_text("# Causeway: findings\n\nBody ![x](../../figures/experiment/itt_effects.png)\n")
+    report.write_text("# CauseWay: findings\n\nBody ![x](../../figures/experiment/itt_effects.png)\n")
     for path in findings.PUBLISHED_FIGURES:
         paths.figures(path).parent.mkdir(parents=True, exist_ok=True)
         paths.figures(path).write_bytes(b"png")
@@ -56,5 +56,5 @@ def test_publish_docs_copies_the_report_and_figures(paths, tmp_path):
     written = findings.publish_docs(paths, docs)
     assert len(written) == 1 + len(findings.PUBLISHED_FIGURES)
     text = (docs / "findings.md").read_text()
-    assert text.startswith("# Causeway: findings\n\n> Copied from")
+    assert text.startswith("# CauseWay: findings\n\n> Copied from")
     assert "![x](figures/itt_effects.png)" in text

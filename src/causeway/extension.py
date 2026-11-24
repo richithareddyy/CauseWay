@@ -570,7 +570,7 @@ def extension_markdown(tables: dict[str, pd.DataFrame], protocol: dict, provenan
     data = provenance["data"]
 
     lines = [
-        "# Causeway validation extension v1: Criteo Uplift v2.1",
+        "# CauseWay validation extension v1: Criteo Uplift v2.1",
         "",
         "A separately versioned check of the Part II conclusions on a second randomized dataset, which "
         "pools several advertising tests, with linear, nonlinear, "

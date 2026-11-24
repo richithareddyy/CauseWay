@@ -1,6 +1,6 @@
-# Causeway: From Correlation to Causal Evidence
+# CauseWay: From Correlation to Causal Evidence
 
-Causeway asks whether assigning customers to a promotional e-mail *caused* them to spend more. It uses
+CauseWay asks whether assigning customers to a promotional e-mail *caused* them to spend more. It uses
 the randomized MineThatData e-mail experiment (Hillstrom, 2008).
 
 - **Part I** analyses the randomized experiment. Its estimand is the intention-to-treat effect of

@@ -204,7 +204,7 @@ fitted predictions fixed, so a fuller account of uncertainty would only strength
 - **Hidden confounding:** see above. Refutation tests check estimator behaviour, not the absence of a
   confounder.
 
-## Validation extension v1: a second randomized trial
+## Validation extension v1: a second randomized dataset
 
 A separately versioned extension repeats the Part II checks on the Criteo Uplift Prediction Dataset v2.1
 (Diemert et al., 2018), a pool of randomized advertising tests, with linear, nonlinear, poor-overlap and
@@ -221,11 +221,13 @@ unchanged. Full results: [extension report](docs/extension.md).
   for the features lowers the visit effect from 1.19 to 0.89 pp (linear) or 0.83 pp (DML), 2.5–2.9 SE.
   Adjusted estimators therefore look about 18–32% biased against the unadjusted reference in the linear
   scenario. Against the adjusted reference, weighting and AIPW recover the effect.
-- **Nonlinear selection breaks linear propensity models.** Linear IPW and AIPW are badly biased against
-  either reference, while DML with boosted nuisances comes closer (−12% against the adjusted reference).
-- **The hidden-confounder failure replicates without needing a reference.** The hidden-feature scenario
-  keeps exactly the same users as the linear one, and hiding the feature raises every adjusted visit estimate
-  by 7% (outcome regression) to 29% (AIPW) of the experimental effect, beyond Monte Carlo error.
+- **Nonlinear selection breaks linear propensity models.** For visits, linear IPW and AIPW are badly biased
+  against either reference, while DML with boosted nuisances comes closer (−12% against the adjusted reference).
+- **Hiding a selection feature shifts the estimates.** The hidden-feature scenario keeps exactly the same
+  users as the linear one, so the comparison needs no reference. Hiding the feature raises every adjusted ATE
+  and ATT estimate for visits by 7% (outcome regression) to 29% (AIPW) of the experimental effect, and the
+  trimmed AIPW estimate by 6.5%, beyond Monte Carlo error. A shift is not by itself a bias: with the feature
+  hidden, IPW and AIPW match the unadjusted visit reference.
 - **DoubleML's nonpositive-nu2 fallbacks** (Section 7, item 16 of the design record) recur here, mostly
   under poor overlap; they do not affect the estimates.
 

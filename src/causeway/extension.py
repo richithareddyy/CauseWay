@@ -1,4 +1,4 @@
-"""Validation extension v1 (configs/extension/v1.toml): the Part II checks on a second randomized trial."""
+"""Validation extension v1 (configs/extension/v1.toml): the Part II checks on a second randomized dataset."""
 
 from __future__ import annotations
 
@@ -572,8 +572,9 @@ def extension_markdown(tables: dict[str, pd.DataFrame], protocol: dict, provenan
     lines = [
         "# Causeway validation extension v1: Criteo Uplift v2.1",
         "",
-        "A separately versioned check of the Part II conclusions on a second randomized trial, with linear, "
-        "nonlinear, poor-overlap and hidden-confounder selection. Protocol: `configs/extension/v1.toml`, "
+        "A separately versioned check of the Part II conclusions on a second randomized dataset, which "
+        "pools several advertising tests, with linear, nonlinear, "
+        "poor-overlap and hidden-confounder selection. Protocol: `configs/extension/v1.toml`, "
         "frozen before any outcome of this dataset was read; gate: `configs/extension/criteo_gate.toml`, "
         "written before its statistics were computed. Commit order records that sequence; it cannot by "
         "itself prove what was "
@@ -1037,9 +1038,11 @@ def _post_hoc_sections(tables: dict[str, pd.DataFrame]) -> list[str]:
         f"{n_adjusted['dml_irm']:+.0%} against the adjusted reference.",
         f"- **Hiding f6 (H):** the paired shift on visit is {moved['ipw_ate']:+.3f} pp for IPW, "
         f"{moved['aipw']:+.3f} pp for AIPW, {moved['outcome_regression']:+.3f} pp for outcome regression and "
-        f"{moved['dml_irm']:+.3f} pp for DML. A hidden "
-        "selection feature moves every adjusted estimate, as in the original study; the size depends on the "
-        "estimator and on how much of f6 the remaining features carry.",
+        f"{moved['dml_irm']:+.3f} pp for DML. Hiding "
+        "a selection feature moves each of these estimates; the size depends on the estimator and on how "
+        "much of f6 the remaining features carry. This is a shift between two analyses of the same "
+        "users, not by "
+        "itself a bias against either reference.",
         f"- **Poor overlap (P):** the oracle's own visit interval covers its reference in only "
         f"{oracle_p_coverage:.0%} of draws, so interval coverage is not informative "
         "there; DoubleML's nu2 fallbacks are also concentrated in this scenario.",

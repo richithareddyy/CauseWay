@@ -2,7 +2,7 @@
 
 > Copied from `reports/results/extension/extension_report.md` by `make docs`. Result tables are produced locally by `make extension`.
 
-A separately versioned check of the Part II conclusions on a second randomized trial, with linear, nonlinear, poor-overlap and hidden-confounder selection. Protocol: `configs/extension/v1.toml`, frozen before any outcome of this dataset was read; gate: `configs/extension/criteo_gate.toml`, written before its statistics were computed. Commit order records that sequence; it cannot by itself prove what was inspected. The original study and its results are unchanged.
+A separately versioned check of the Part II conclusions on a second randomized dataset, which pools several advertising tests, with linear, nonlinear, poor-overlap and hidden-confounder selection. Protocol: `configs/extension/v1.toml`, frozen before any outcome of this dataset was read; gate: `configs/extension/criteo_gate.toml`, written before its statistics were computed. Commit order records that sequence; it cannot by itself prove what was inspected. The original study and its results are unchanged.
 
 Effects are in percentage points (pp) of the visit or conversion rate.
 
@@ -177,7 +177,7 @@ A cross-fitted gradient-boosting propensity on the full pool ranges from 0.53 to
 - **The difference in means is not a clean reference for adjusted estimators on visit.** Adjusting for the features moves the full-pool visit effect by -0.300 pp (-25%; -2.5 SE), and the nonparametric DML adjustment agrees (0.827 pp). Treatment in the released file is slightly predictable from features that predict visits. The gate's tolerances, set before any outcome was read, did not anticipate that so small an imbalance could matter this much. In scenario A the adjusted estimators' visit bias against the difference in means ranges from -32% to -18%, the same order as this gap.
 - **Scenario A, against the adjusted reference:** ipw_ate, aipw recover it within Monte Carlo error on visit.
 - **Nonlinear selection (N):** linear-propensity IPW is biased by +54% and linear AIPW by -56% against the difference in means (+107% and -40% against the adjusted reference). DML with boosted nuisances is closer: -12% against the adjusted reference.
-- **Hiding f6 (H):** the paired shift on visit is +0.236 pp for IPW, +0.339 pp for AIPW, +0.085 pp for outcome regression and +0.122 pp for DML. A hidden selection feature moves every adjusted estimate, as in the original study; the size depends on the estimator and on how much of f6 the remaining features carry.
+- **Hiding f6 (H):** the paired shift on visit is +0.236 pp for IPW, +0.339 pp for AIPW, +0.085 pp for outcome regression and +0.122 pp for DML. Hiding a selection feature moves each of these estimates; the size depends on the estimator and on how much of f6 the remaining features carry. This is a shift between two analyses of the same users, not by itself a bias against either reference.
 - **Poor overlap (P):** the oracle's own visit interval covers its reference in only 70% of draws, so interval coverage is not informative there; DoubleML's nu2 fallbacks are also concentrated in this scenario.
 - **Conversion** is rare (about 0.3%), so even the oracle's Monte Carlo error is large; conversion results support few conclusions either way.
 

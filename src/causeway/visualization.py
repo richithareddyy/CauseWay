@@ -1274,7 +1274,7 @@ EXTENSION_LABELS = {
 
 
 def extension_heatmap(summary: pd.DataFrame, path: Path, estimators: list[str], outcomes: list[str]) -> Path:
-    """Do the Part II conclusions hold on a second randomized trial and under other kinds of selection?"""
+    """Do the Part II conclusions hold on a second randomized dataset and under other kinds of selection?"""
     apply_style()
     scenarios = ["A", "N", "P", "H"]
     fig, axes = plt.subplots(1, len(outcomes), figsize=(9.5, 0.36 * len(estimators) + 1.9), sharey=True)

@@ -294,13 +294,15 @@ make data      # download, verify checksum, validate, and build the processed da
 make analysis  # every analysis and the findings report (about 75 min on 8 cores)
 make docs      # copy the findings report and key figures into docs/
 make test      # run the test suite
+make verify    # check the README and findings numbers against the committed tables, without rerunning
 ```
 
 The results above come from a clean run of commit `0fe84ed` in a fresh clone, and every output matched an
 earlier independent run exactly. The history was later rewritten; `0fe84ed` has the same files as `73e57c8`,
-which is the hash on GitHub ([design, item 14](docs/design.md)). Seeds are fixed in the configuration,
-and each result directory records the data checksum, benchmark specification, seed, commit and package
-versions it was produced with.
+which is the hash on GitHub ([design, item 14](docs/design.md)). Seeds are fixed in the configuration.
+Each analysis records its data checksums, code commit and package versions, and either the benchmark
+specification with its seed or its plan version; the robustness plan itself is not recorded. The aggregate
+tables behind the README and findings numbers are committed under `reports/results/`.
 
 `make data` does the following:
 
@@ -317,8 +319,8 @@ versions it was produced with.
 5. Writes `reports/validation/validation_report.md`, which records every check and every transformation,
    and `data/processed/manifest.json`, which records checksums, row counts and package versions.
 
-The data are not stored in this repository. The source states no license, so the pipeline downloads
-them from the original publisher.
+The data are not stored in this repository. Hillstrom's source states no license, so the pipeline downloads
+the file from the original publisher. The dataset terms are in the [README](README.md#data-and-licenses).
 
 ## Checks
 
@@ -331,12 +333,12 @@ not establish that a causal assumption holds in a new dataset.
 
 ```
 configs/          data sources, the frozen benchmark specification and the pre-specified analysis plans
-docs/             design record, findings report and the figures shown in this README
+docs/             design record, findings report and the figures shown in the README and this guide
 scripts/          standalone raw-file audit (standard library only)
 src/causeway/     acquisition, validation, experimental and observational estimation, reporting
 tests/            pytest suite: data checks, estimators, benchmark construction and reports
 data/             raw / interim / processed (generated, not versioned)
-reports/          validation reports, figures, results (generated, not versioned)
+reports/          validation reports, figures, results (generated; only the aggregate tables are versioned)
 ```
 
 ## Tech stack

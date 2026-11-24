@@ -20,7 +20,7 @@ help:
 	@echo "format  apply ruff formatting fixes"
 	@echo "env     print Python and dependency versions"
 	@echo "lock    regenerate requirements.txt from the current environment"
-	@echo "clean   remove derived data and reports (raw data is kept)"
+	@echo "clean   remove derived data and reports (raw data and committed tables are kept)"
 
 $(BIN)/python:
 	$(PYTHON) -c 'import sys; assert sys.version_info[:2] == (3, 12), "Python 3.12 is required"'
@@ -75,5 +75,6 @@ format:
 	$(BIN)/ruff check --fix src tests scripts
 	$(BIN)/ruff format src tests scripts
 
+# -X removes only git-ignored files, so the committed result tables are never deleted.
 clean:
-	find data/interim data/processed reports/validation reports/results reports/figures -type f ! -name .gitkeep -delete
+	git clean -fdqX -- data/interim data/processed reports/validation reports/results reports/figures

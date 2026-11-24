@@ -1,0 +1,25 @@
+{
+  "data": {
+    "raw_sha256": "0e5893329d8b93cefecc571777672028290ab69865718020c78c7284f291aece",
+    "processed_sha256": "5e722de97e02d52ad55a9db56cbbe37654c1d1390bdb3cfd0b2ef9583f8bb05b",
+    "rows": 64000
+  },
+  "code": {
+    "commit": "0fe84edee65ecef68b5bea2edf50423dbaec411a",
+    "uncommitted_changes": false
+  },
+  "environment": {
+    "python": "3.12.15",
+    "packages": {
+      "numpy": "2.4.6",
+      "pandas": "3.0.6",
+      "pyarrow": "26.0.0",
+      "scipy": "1.15.3",
+      "statsmodels": "0.15.0",
+      "scikit-learn": "1.9.1",
+      "econml": "0.17.0",
+      "doubleml": "0.11.4"
+    }
+  },
+  "heterogeneity_plan_version": "1.0.0"
+}

@@ -1,0 +1,244 @@
+{
+  "stage": "raw",
+  "n_rows": 64000,
+  "n_columns": 12,
+  "passed": true,
+  "checks": [
+    {
+      "name": "schema_columns",
+      "category": "structure",
+      "status": "pass",
+      "message": "12 expected columns, in the documented order",
+      "details": {}
+    },
+    {
+      "name": "row_count",
+      "category": "structure",
+      "status": "pass",
+      "message": "64,000 rows, as documented by the source",
+      "details": {}
+    },
+    {
+      "name": "missing_values",
+      "category": "completeness",
+      "status": "pass",
+      "message": "no empty or NA-like values in any column",
+      "details": {}
+    },
+    {
+      "name": "data_types",
+      "category": "types",
+      "status": "pass",
+      "message": "integer and decimal columns parse without loss",
+      "details": {}
+    },
+    {
+      "name": "domain_segment",
+      "category": "categories",
+      "status": "pass",
+      "message": "3 recognised labels",
+      "details": {
+        "counts": {
+          "Womens E-Mail": 21387,
+          "Mens E-Mail": 21307,
+          "No E-Mail": 21306
+        }
+      }
+    },
+    {
+      "name": "domain_history_segment",
+      "category": "categories",
+      "status": "pass",
+      "message": "7 recognised labels",
+      "details": {
+        "counts": {
+          "1) $0 - $100": 22970,
+          "2) $100 - $200": 14254,
+          "3) $200 - $350": 12289,
+          "4) $350 - $500": 6409,
+          "5) $500 - $750": 4911,
+          "6) $750 - $1,000": 1859,
+          "7) $1,000 +": 1308
+        }
+      }
+    },
+    {
+      "name": "domain_channel",
+      "category": "categories",
+      "status": "pass",
+      "message": "3 recognised labels",
+      "details": {
+        "counts": {
+          "Web": 28217,
+          "Phone": 28021,
+          "Multichannel": 7762
+        }
+      }
+    },
+    {
+      "name": "domain_zip_code",
+      "category": "categories",
+      "status": "pass",
+      "message": "3 recognised labels",
+      "details": {
+        "counts": {
+          "Surburban": 28776,
+          "Urban": 25661,
+          "Rural": 9563
+        }
+      }
+    },
+    {
+      "name": "category_spelling",
+      "category": "categories",
+      "status": "info",
+      "message": "source spelling normalised in processing: 'Surburban' x28,776 -> 'Suburban'",
+      "details": {
+        "variants": {
+          "Surburban": 28776
+        }
+      }
+    },
+    {
+      "name": "binary_encoding",
+      "category": "encoding",
+      "status": "pass",
+      "message": "mens, womens, newbie, visit, conversion are all 0/1",
+      "details": {}
+    },
+    {
+      "name": "recency_range",
+      "category": "impossible_values",
+      "status": "pass",
+      "message": "all within 1-12 months",
+      "details": {}
+    },
+    {
+      "name": "history_positive",
+      "category": "impossible_values",
+      "status": "pass",
+      "message": "all positive (min 29.99, max 3345.93)",
+      "details": {}
+    },
+    {
+      "name": "spend_nonnegative",
+      "category": "impossible_values",
+      "status": "pass",
+      "message": "no negative spend",
+      "details": {}
+    },
+    {
+      "name": "exact_duplicate_rows",
+      "category": "duplicates",
+      "status": "info",
+      "message": "6,562 rows repeat an earlier row exactly (7,634 rows in 1,072 groups; 99.2% of them have history = 29.99). Retained: with no customer identifier, identical features do not establish duplicate customers.",
+      "details": {
+        "extra_copies": 6562,
+        "rows_in_groups": 7634,
+        "share_history_29_99": 0.9916164527115536,
+        "groups_with_conversion": 0
+      }
+    },
+    {
+      "name": "history_segment_consistency",
+      "category": "consistency",
+      "status": "pass",
+      "message": "every history value lies inside its history_segment bin",
+      "details": {}
+    },
+    {
+      "name": "conversion_implies_visit",
+      "category": "outcome_encoding",
+      "status": "pass",
+      "message": "every converter also visited",
+      "details": {}
+    },
+    {
+      "name": "spend_conversion_consistency",
+      "category": "outcome_encoding",
+      "status": "pass",
+      "message": "spend > 0 exactly when conversion = 1",
+      "details": {}
+    },
+    {
+      "name": "merchandise_history",
+      "category": "consistency",
+      "status": "pass",
+      "message": "every customer bought Mens and/or Womens merchandise in the past year",
+      "details": {}
+    },
+    {
+      "name": "treatment_arms",
+      "category": "treatment_encoding",
+      "status": "pass",
+      "message": "No E-Mail: 21,306, Mens E-Mail: 21,307, Womens E-Mail: 21,387",
+      "details": {
+        "counts": {
+          "No E-Mail": 21306,
+          "Mens E-Mail": 21307,
+          "Womens E-Mail": 21387
+        }
+      }
+    },
+    {
+      "name": "allocation_ratio",
+      "category": "sample_counts",
+      "status": "pass",
+      "message": "chi-square test of equal thirds: chi2(2) = 0.203, p = 0.904",
+      "details": {
+        "chi2": 0.20253125000000002,
+        "p_value": 0.9036929575604196
+      }
+    },
+    {
+      "name": "balance_mens_vs_control",
+      "category": "treatment_balance",
+      "status": "pass",
+      "message": "max |SMD| = 0.0137 (zip_rural); threshold 0.1",
+      "details": {
+        "smd": {
+          "ln_history": -0.001191373861400055,
+          "recency": 0.006831532454259954,
+          "mens": -0.0045823256374879625,
+          "womens": 0.007588929691887142,
+          "newbie": -0.0008918953696535328,
+          "zip_urban": 0.0019722315768513645,
+          "zip_rural": 0.01365900039927897,
+          "channel_web": 0.011013588354428299,
+          "channel_multichannel": -0.004181536419632754
+        }
+      }
+    },
+    {
+      "name": "balance_womens_vs_control",
+      "category": "treatment_balance",
+      "status": "pass",
+      "message": "max |SMD| = 0.0086 (mens); threshold 0.1",
+      "details": {
+        "smd": {
+          "ln_history": 0.006474878026590676,
+          "recency": 0.005180013205688683,
+          "mens": -0.008630731202832915,
+          "womens": 0.004946313992582152,
+          "newbie": 0.0025567009140795606,
+          "zip_urban": -0.0017628666291550237,
+          "zip_rural": 0.00395850560137286,
+          "channel_web": -0.005147863897421752,
+          "channel_multichannel": -0.00528289712504171
+        }
+      }
+    },
+    {
+      "name": "spend_upper_boundary",
+      "category": "anomalies",
+      "status": "info",
+      "message": "observed maximum spend 499.00 reached by 12 customers; whether this is a true maximum or a data-generation constraint is unknown",
+      "details": {
+        "maximum": 499.0,
+        "n_at_maximum": 12,
+        "n_positive": 578,
+        "minimum_positive": 29.99
+      }
+    }
+  ]
+}

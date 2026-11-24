@@ -4,11 +4,30 @@ data/interim/*
 data/processed/*
 !data/**/.gitkeep
 
-# Generated analysis outputs
+# Generated analysis outputs stay local, except the aggregate tables behind README.md and docs/findings.md.
+# Each tracked file is named: per-draw tables, per-customer predictions and raw data are never committed.
 reports/figures/*
-reports/results/*
 reports/validation/*
+reports/results/**
+!reports/results/**/
 !reports/**/.gitkeep
+!reports/validation/validation_raw.json
+!reports/results/*/provenance.json
+reports/results/extension/provenance.json
+!reports/results/experiment/effects.csv
+!reports/results/experiment/relative_lift.csv
+!reports/results/experiment/balance.csv
+!reports/results/experiment/diagnostics.csv
+!reports/results/benchmark/bias_decomposition.csv
+!reports/results/comparison/display_draw.csv
+!reports/results/comparison/performance.csv
+!reports/results/heterogeneity/verdicts.csv
+!reports/results/heterogeneity/policy_differences.csv
+!reports/results/robustness/experiment_robustness.csv
+!reports/results/robustness/bootstrap_stability.csv
+!reports/results/robustness/refutation_summary.csv
+!reports/results/robustness/sensitivity_summary.csv
+!reports/results/findings/estimator_table.csv
 
 # Python
 __pycache__/

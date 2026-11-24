@@ -1,0 +1,121 @@
+comparison,scenario,outcome,Estimator,Estimand,Estimated effect (draw 0),95% CI (draw 0),Mean bias vs benchmark (200 draws),CI coverage,Key assumptions
+mens_vs_control,A,spend,Randomized experiment,"ATE (randomized, full pair)",$0.77,"[$0.49, $1.05]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+mens_vs_control,A,spend,Randomized experiment,"ATT (randomized pair, e*-weighted)",$0.89,"[$0.52, $1.25]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+mens_vs_control,A,spend,Naive difference,unadjusted association,$0.97,"[$0.57, $1.36]",+48.1% *,64%,Assignment independent of potential outcomes (violated by construction in Part II).
+mens_vs_control,A,spend,Oracle IPW (true e*),ATE,$0.54,"[$0.18, $0.90]",+0.7%,100%,Known propensity; positivity. Checks the construction; not a feasible estimator.
+mens_vs_control,A,spend,Outcome regression (OLS),ATE,$0.56,"[$0.17, $0.94]",-4.0% *,100%,Unconfoundedness given the analyst covariates; correctly specified outcome model.
+mens_vs_control,A,spend,IPW (ATE),ATE,$0.54,"[$0.18, $0.90]",+0.4%,100%,Unconfoundedness; positivity for both arms; correctly specified propensity model.
+mens_vs_control,A,spend,"AIPW (linear, cross-fitted)",ATE,$0.54,"[$0.19, $0.90]",+1.1%,100%,Unconfoundedness; positivity; at least one of the propensity and outcome models correct.
+mens_vs_control,A,spend,DML (gradient boosting),ATE,$0.52,"[$0.15, $0.89]",+0.1%,100%,Unconfoundedness; positivity; nuisance learners converge fast enough (o(n^-1/4)) under cross-fitting.
+mens_vs_control,A,spend,IPW (ATT),ATT,$0.82,"[$0.35, $1.29]",+0.6%,98%,Unconfoundedness for controls; controls overlap the treated; correct propensity model.
+mens_vs_control,A,spend,1:1 NN matching (ATT),ATT,$0.58,"[$0.15, $1.01]",-12.0% *,97%,Unconfoundedness; treated units have close controls; unmatched treated change the estimand to the ATT among matched treated.
+mens_vs_control,A,visit,Randomized experiment,"ATE (randomized, full pair)",7.66 pp,"[7.00, 8.32]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+mens_vs_control,A,visit,Randomized experiment,"ATT (randomized pair, e*-weighted)",8.14 pp,"[7.34, 8.94]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+mens_vs_control,A,visit,Naive difference,unadjusted association,11.51 pp,"[10.58, 12.43]",+51.4% *,0%,Assignment independent of potential outcomes (violated by construction in Part II).
+mens_vs_control,A,visit,Oracle IPW (true e*),ATE,7.35 pp,"[6.25, 8.45]",+0.3%,97%,Known propensity; positivity. Checks the construction; not a feasible estimator.
+mens_vs_control,A,visit,Outcome regression (OLS),ATE,7.45 pp,"[6.42, 8.48]",-1.2% *,98%,Unconfoundedness given the analyst covariates; correctly specified outcome model.
+mens_vs_control,A,visit,IPW (ATE),ATE,7.39 pp,"[6.29, 8.48]",-0.5%,98%,Unconfoundedness; positivity for both arms; correctly specified propensity model.
+mens_vs_control,A,visit,"AIPW (linear, cross-fitted)",ATE,7.40 pp,"[6.32, 8.47]",-0.2%,97%,Unconfoundedness; positivity; at least one of the propensity and outcome models correct.
+mens_vs_control,A,visit,DML (gradient boosting),ATE,7.05 pp,"[5.97, 8.14]",-1.3% *,97%,Unconfoundedness; positivity; nuisance learners converge fast enough (o(n^-1/4)) under cross-fitting.
+mens_vs_control,A,visit,IPW (ATT),ATT,8.25 pp,"[6.92, 9.59]",-0.5%,96%,Unconfoundedness for controls; controls overlap the treated; correct propensity model.
+mens_vs_control,A,visit,1:1 NN matching (ATT),ATT,8.06 pp,"[6.92, 9.20]",-2.8% *,97%,Unconfoundedness; treated units have close controls; unmatched treated change the estimand to the ATT among matched treated.
+mens_vs_control,B,spend,Randomized experiment,"ATE (randomized, full pair)",$0.77,"[$0.49, $1.05]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+mens_vs_control,B,spend,Randomized experiment,"ATT (randomized pair, e*-weighted)",$0.95,"[$0.54, $1.36]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+mens_vs_control,B,spend,Naive difference,unadjusted association,$1.23,"[$0.82, $1.64]",+69.7% *,12%,Assignment independent of potential outcomes (violated by construction in Part II).
+mens_vs_control,B,spend,Oracle IPW (true e*),ATE,$0.79,"[$0.40, $1.19]",-0.8%,98%,Known propensity; positivity. Checks the construction; not a feasible estimator.
+mens_vs_control,B,spend,Outcome regression (OLS),ATE,$0.72,"[$0.21, $1.23]",-4.2% *,98%,Unconfoundedness given the analyst covariates; correctly specified outcome model.
+mens_vs_control,B,spend,IPW (ATE),ATE,$0.78,"[$0.38, $1.18]",-1.7%,98%,Unconfoundedness; positivity for both arms; correctly specified propensity model.
+mens_vs_control,B,spend,"AIPW (linear, cross-fitted)",ATE,$0.76,"[$0.36, $1.16]",+0.7%,98%,Unconfoundedness; positivity; at least one of the propensity and outcome models correct.
+mens_vs_control,B,spend,DML (gradient boosting),ATE,$0.99,"[$0.52, $1.45]",+0.6%,100%,Unconfoundedness; positivity; nuisance learners converge fast enough (o(n^-1/4)) under cross-fitting.
+mens_vs_control,B,spend,IPW (ATT),ATT,$1.17,"[$0.69, $1.65]",-0.0%,88%,Unconfoundedness for controls; controls overlap the treated; correct propensity model.
+mens_vs_control,B,spend,1:1 NN matching (ATT),ATT,$0.94,"[$0.35, $1.54]",-9.3% *,98%,Unconfoundedness; treated units have close controls; unmatched treated change the estimand to the ATT among matched treated.
+mens_vs_control,B,visit,Randomized experiment,"ATE (randomized, full pair)",7.66 pp,"[7.00, 8.32]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+mens_vs_control,B,visit,Randomized experiment,"ATT (randomized pair, e*-weighted)",8.40 pp,"[7.50, 9.29]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+mens_vs_control,B,visit,Naive difference,unadjusted association,13.33 pp,"[12.40, 14.27]",+72.1% *,0%,Assignment independent of potential outcomes (violated by construction in Part II).
+mens_vs_control,B,visit,Oracle IPW (true e*),ATE,7.29 pp,"[5.14, 9.43]",+0.4%,96%,Known propensity; positivity. Checks the construction; not a feasible estimator.
+mens_vs_control,B,visit,Outcome regression (OLS),ATE,7.76 pp,"[6.49, 9.02]",-1.8% *,100%,Unconfoundedness given the analyst covariates; correctly specified outcome model.
+mens_vs_control,B,visit,IPW (ATE),ATE,7.17 pp,"[5.00, 9.34]",-1.1%,96%,Unconfoundedness; positivity for both arms; correctly specified propensity model.
+mens_vs_control,B,visit,"AIPW (linear, cross-fitted)",ATE,7.24 pp,"[5.16, 9.31]",+0.1%,96%,Unconfoundedness; positivity; at least one of the propensity and outcome models correct.
+mens_vs_control,B,visit,DML (gradient boosting),ATE,5.81 pp,"[2.79, 8.82]",-0.4%,95%,Unconfoundedness; positivity; nuisance learners converge fast enough (o(n^-1/4)) under cross-fitting.
+mens_vs_control,B,visit,IPW (ATT),ATT,7.86 pp,"[4.57, 11.15]",-0.8%,94%,Unconfoundedness for controls; controls overlap the treated; correct propensity model.
+mens_vs_control,B,visit,1:1 NN matching (ATT),ATT,8.64 pp,"[7.20, 10.09]",-8.3% *,88%,Unconfoundedness; treated units have close controls; unmatched treated change the estimand to the ATT among matched treated.
+mens_vs_control,C,spend,Randomized experiment,"ATE (randomized, full pair)",$0.77,"[$0.49, $1.05]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+mens_vs_control,C,spend,Randomized experiment,"ATT (randomized pair, e*-weighted)",$0.89,"[$0.52, $1.25]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+mens_vs_control,C,spend,Naive difference,unadjusted association,$0.97,"[$0.57, $1.36]",+48.1% *,64%,Assignment independent of potential outcomes (violated by construction in Part II).
+mens_vs_control,C,spend,Oracle IPW (true e*),ATE,$0.54,"[$0.18, $0.90]",+0.7%,100%,Known propensity; positivity. Checks the construction; not a feasible estimator.
+mens_vs_control,C,spend,Outcome regression (OLS),ATE,$0.70,"[$0.34, $1.07]",+13.7% *,98%,Unconfoundedness given the analyst covariates; correctly specified outcome model.
+mens_vs_control,C,spend,IPW (ATE),ATE,$0.73,"[$0.35, $1.10]",+17.7% *,98%,Unconfoundedness; positivity for both arms; correctly specified propensity model.
+mens_vs_control,C,spend,"AIPW (linear, cross-fitted)",ATE,$0.74,"[$0.37, $1.11]",+18.7% *,97%,Unconfoundedness; positivity; at least one of the propensity and outcome models correct.
+mens_vs_control,C,spend,DML (gradient boosting),ATE,$0.73,"[$0.35, $1.12]",+19.1% *,96%,Unconfoundedness; positivity; nuisance learners converge fast enough (o(n^-1/4)) under cross-fitting.
+mens_vs_control,C,spend,IPW (ATT),ATT,$0.95,"[$0.53, $1.37]",+18.4% *,96%,Unconfoundedness for controls; controls overlap the treated; correct propensity model.
+mens_vs_control,C,spend,1:1 NN matching (ATT),ATT,$0.93,"[$0.45, $1.41]",-4.2% *,98%,Unconfoundedness; treated units have close controls; unmatched treated change the estimand to the ATT among matched treated.
+mens_vs_control,C,visit,Randomized experiment,"ATE (randomized, full pair)",7.66 pp,"[7.00, 8.32]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+mens_vs_control,C,visit,Randomized experiment,"ATT (randomized pair, e*-weighted)",8.14 pp,"[7.34, 8.94]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+mens_vs_control,C,visit,Naive difference,unadjusted association,11.51 pp,"[10.58, 12.43]",+51.4% *,0%,Assignment independent of potential outcomes (violated by construction in Part II).
+mens_vs_control,C,visit,Oracle IPW (true e*),ATE,7.35 pp,"[6.25, 8.45]",+0.3%,97%,Known propensity; positivity. Checks the construction; not a feasible estimator.
+mens_vs_control,C,visit,Outcome regression (OLS),ATE,9.42 pp,"[8.44, 10.40]",+21.1% *,4%,Unconfoundedness given the analyst covariates; correctly specified outcome model.
+mens_vs_control,C,visit,IPW (ATE),ATE,9.35 pp,"[8.35, 10.35]",+20.5% *,9%,Unconfoundedness; positivity for both arms; correctly specified propensity model.
+mens_vs_control,C,visit,"AIPW (linear, cross-fitted)",ATE,9.38 pp,"[8.38, 10.37]",+20.7% *,8%,Unconfoundedness; positivity; at least one of the propensity and outcome models correct.
+mens_vs_control,C,visit,DML (gradient boosting),ATE,9.17 pp,"[8.14, 10.19]",+18.8% *,18%,Unconfoundedness; positivity; nuisance learners converge fast enough (o(n^-1/4)) under cross-fitting.
+mens_vs_control,C,visit,IPW (ATT),ATT,9.93 pp,"[8.83, 11.02]",+17.7% *,24%,Unconfoundedness for controls; controls overlap the treated; correct propensity model.
+mens_vs_control,C,visit,1:1 NN matching (ATT),ATT,9.98 pp,"[8.90, 11.06]",+18.2% *,14%,Unconfoundedness; treated units have close controls; unmatched treated change the estimand to the ATT among matched treated.
+womens_vs_control,A,spend,Randomized experiment,"ATE (randomized, full pair)",$0.42,"[$0.17, $0.68]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+womens_vs_control,A,spend,Randomized experiment,"ATT (randomized pair, e*-weighted)",$0.40,"[$0.09, $0.72]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+womens_vs_control,A,spend,Naive difference,unadjusted association,$0.76,"[$0.39, $1.14]",+56.9% *,86%,Assignment independent of potential outcomes (violated by construction in Part II).
+womens_vs_control,A,spend,Oracle IPW (true e*),ATE,$0.60,"[$0.12, $1.09]",+0.1%,100%,Known propensity; positivity. Checks the construction; not a feasible estimator.
+womens_vs_control,A,spend,Outcome regression (OLS),ATE,$0.64,"[$0.18, $1.10]",+9.8% *,98%,Unconfoundedness given the analyst covariates; correctly specified outcome model.
+womens_vs_control,A,spend,IPW (ATE),ATE,$0.61,"[$0.12, $1.09]",+0.4%,100%,Unconfoundedness; positivity for both arms; correctly specified propensity model.
+womens_vs_control,A,spend,"AIPW (linear, cross-fitted)",ATE,$0.60,"[$0.12, $1.09]",+0.9%,99%,Unconfoundedness; positivity; at least one of the propensity and outcome models correct.
+womens_vs_control,A,spend,DML (gradient boosting),ATE,$0.62,"[$0.11, $1.12]",+6.7% *,98%,Unconfoundedness; positivity; nuisance learners converge fast enough (o(n^-1/4)) under cross-fitting.
+womens_vs_control,A,spend,IPW (ATT),ATT,$0.48,"[-$0.01, $0.97]",-2.9%,98%,Unconfoundedness for controls; controls overlap the treated; correct propensity model.
+womens_vs_control,A,spend,1:1 NN matching (ATT),ATT,$0.69,"[$0.20, $1.18]",+20.3% *,98%,Unconfoundedness; treated units have close controls; unmatched treated change the estimand to the ATT among matched treated.
+womens_vs_control,A,visit,Randomized experiment,"ATE (randomized, full pair)",4.52 pp,"[3.89, 5.16]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+womens_vs_control,A,visit,Randomized experiment,"ATT (randomized pair, e*-weighted)",4.41 pp,"[3.65, 5.18]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+womens_vs_control,A,visit,Naive difference,unadjusted association,7.78 pp,"[6.91, 8.66]",+74.3% *,0%,Assignment independent of potential outcomes (violated by construction in Part II).
+womens_vs_control,A,visit,Oracle IPW (true e*),ATE,4.55 pp,"[3.44, 5.66]",+0.1%,98%,Known propensity; positivity. Checks the construction; not a feasible estimator.
+womens_vs_control,A,visit,Outcome regression (OLS),ATE,4.49 pp,"[3.47, 5.50]",+0.2%,99%,Unconfoundedness given the analyst covariates; correctly specified outcome model.
+womens_vs_control,A,visit,IPW (ATE),ATE,4.49 pp,"[3.37, 5.60]",-0.2%,98%,Unconfoundedness; positivity for both arms; correctly specified propensity model.
+womens_vs_control,A,visit,"AIPW (linear, cross-fitted)",ATE,4.50 pp,"[3.39, 5.61]",+0.6%,98%,Unconfoundedness; positivity; at least one of the propensity and outcome models correct.
+womens_vs_control,A,visit,DML (gradient boosting),ATE,4.50 pp,"[3.40, 5.61]",-0.3%,98%,Unconfoundedness; positivity; nuisance learners converge fast enough (o(n^-1/4)) under cross-fitting.
+womens_vs_control,A,visit,IPW (ATT),ATT,4.11 pp,"[2.71, 5.50]",+0.2%,96%,Unconfoundedness for controls; controls overlap the treated; correct propensity model.
+womens_vs_control,A,visit,1:1 NN matching (ATT),ATT,4.83 pp,"[3.71, 5.96]",+10.4% *,94%,Unconfoundedness; treated units have close controls; unmatched treated change the estimand to the ATT among matched treated.
+womens_vs_control,B,spend,Randomized experiment,"ATE (randomized, full pair)",$0.42,"[$0.17, $0.68]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+womens_vs_control,B,spend,Randomized experiment,"ATT (randomized pair, e*-weighted)",$0.37,"[$0.03, $0.71]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+womens_vs_control,B,spend,Naive difference,unadjusted association,$0.78,"[$0.42, $1.15]",+75.4% *,62%,Assignment independent of potential outcomes (violated by construction in Part II).
+womens_vs_control,B,spend,Oracle IPW (true e*),ATE,$0.57,"[$0.20, $0.95]",+1.7%,98%,Known propensity; positivity. Checks the construction; not a feasible estimator.
+womens_vs_control,B,spend,Outcome regression (OLS),ATE,$0.63,"[$0.12, $1.15]",+23.0% *,99%,Unconfoundedness given the analyst covariates; correctly specified outcome model.
+womens_vs_control,B,spend,IPW (ATE),ATE,$0.57,"[$0.20, $0.95]",+1.5%,98%,Unconfoundedness; positivity for both arms; correctly specified propensity model.
+womens_vs_control,B,spend,"AIPW (linear, cross-fitted)",ATE,$0.59,"[$0.21, $0.97]",+3.1%,98%,Unconfoundedness; positivity; at least one of the propensity and outcome models correct.
+womens_vs_control,B,spend,DML (gradient boosting),ATE,$0.54,"[$0.13, $0.95]",+1.1%,96%,Unconfoundedness; positivity; nuisance learners converge fast enough (o(n^-1/4)) under cross-fitting.
+womens_vs_control,B,spend,IPW (ATT),ATT,$0.92,"[$0.55, $1.28]",-6.4%,80%,Unconfoundedness for controls; controls overlap the treated; correct propensity model.
+womens_vs_control,B,spend,1:1 NN matching (ATT),ATT,$0.69,"[$0.14, $1.25]",+56.8% *,94%,Unconfoundedness; treated units have close controls; unmatched treated change the estimand to the ATT among matched treated.
+womens_vs_control,B,visit,Randomized experiment,"ATE (randomized, full pair)",4.52 pp,"[3.89, 5.16]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+womens_vs_control,B,visit,Randomized experiment,"ATT (randomized pair, e*-weighted)",4.32 pp,"[3.47, 5.17]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+womens_vs_control,B,visit,Naive difference,unadjusted association,9.00 pp,"[8.11, 9.89]",+102.4% *,0%,Assignment independent of potential outcomes (violated by construction in Part II).
+womens_vs_control,B,visit,Oracle IPW (true e*),ATE,5.65 pp,"[2.90, 8.40]",-0.9%,96%,Known propensity; positivity. Checks the construction; not a feasible estimator.
+womens_vs_control,B,visit,Outcome regression (OLS),ATE,4.53 pp,"[3.27, 5.79]",-2.3% *,99%,Unconfoundedness given the analyst covariates; correctly specified outcome model.
+womens_vs_control,B,visit,IPW (ATE),ATE,5.61 pp,"[2.96, 8.26]",-2.8%,96%,Unconfoundedness; positivity for both arms; correctly specified propensity model.
+womens_vs_control,B,visit,"AIPW (linear, cross-fitted)",ATE,5.60 pp,"[2.88, 8.33]",-0.5%,96%,Unconfoundedness; positivity; at least one of the propensity and outcome models correct.
+womens_vs_control,B,visit,DML (gradient boosting),ATE,4.95 pp,"[2.90, 7.00]",-0.5%,93%,Unconfoundedness; positivity; nuisance learners converge fast enough (o(n^-1/4)) under cross-fitting.
+womens_vs_control,B,visit,IPW (ATT),ATT,4.37 pp,"[1.84, 6.91]",-3.3%,92%,Unconfoundedness for controls; controls overlap the treated; correct propensity model.
+womens_vs_control,B,visit,1:1 NN matching (ATT),ATT,4.33 pp,"[2.91, 5.75]",+7.9% *,96%,Unconfoundedness; treated units have close controls; unmatched treated change the estimand to the ATT among matched treated.
+womens_vs_control,C,spend,Randomized experiment,"ATE (randomized, full pair)",$0.42,"[$0.17, $0.68]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+womens_vs_control,C,spend,Randomized experiment,"ATT (randomized pair, e*-weighted)",$0.40,"[$0.09, $0.72]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+womens_vs_control,C,spend,Naive difference,unadjusted association,$0.76,"[$0.39, $1.14]",+56.9% *,86%,Assignment independent of potential outcomes (violated by construction in Part II).
+womens_vs_control,C,spend,Oracle IPW (true e*),ATE,$0.60,"[$0.12, $1.09]",+0.1%,100%,Known propensity; positivity. Checks the construction; not a feasible estimator.
+womens_vs_control,C,spend,Outcome regression (OLS),ATE,$0.68,"[$0.24, $1.12]",+34.1% *,98%,Unconfoundedness given the analyst covariates; correctly specified outcome model.
+womens_vs_control,C,spend,IPW (ATE),ATE,$0.74,"[$0.27, $1.21]",+45.7% *,96%,Unconfoundedness; positivity for both arms; correctly specified propensity model.
+womens_vs_control,C,spend,"AIPW (linear, cross-fitted)",ATE,$0.74,"[$0.27, $1.22]",+46.8% *,95%,Unconfoundedness; positivity; at least one of the propensity and outcome models correct.
+womens_vs_control,C,spend,DML (gradient boosting),ATE,$0.71,"[$0.25, $1.16]",+45.6% *,94%,Unconfoundedness; positivity; nuisance learners converge fast enough (o(n^-1/4)) under cross-fitting.
+womens_vs_control,C,spend,IPW (ATT),ATT,$0.66,"[$0.25, $1.08]",+42.9% *,96%,Unconfoundedness for controls; controls overlap the treated; correct propensity model.
+womens_vs_control,C,spend,1:1 NN matching (ATT),ATT,$0.40,"[-$0.03, $0.83]",+12.6% *,100%,Unconfoundedness; treated units have close controls; unmatched treated change the estimand to the ATT among matched treated.
+womens_vs_control,C,visit,Randomized experiment,"ATE (randomized, full pair)",4.52 pp,"[3.89, 5.16]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+womens_vs_control,C,visit,Randomized experiment,"ATT (randomized pair, e*-weighted)",4.41 pp,"[3.65, 5.18]",benchmark,—,"Randomized assignment; SUTVA (no interference, one version of each e-mail)."
+womens_vs_control,C,visit,Naive difference,unadjusted association,7.78 pp,"[6.91, 8.66]",+74.3% *,0%,Assignment independent of potential outcomes (violated by construction in Part II).
+womens_vs_control,C,visit,Oracle IPW (true e*),ATE,4.55 pp,"[3.44, 5.66]",+0.1%,98%,Known propensity; positivity. Checks the construction; not a feasible estimator.
+womens_vs_control,C,visit,Outcome regression (OLS),ATE,5.98 pp,"[5.02, 6.93]",+31.9% *,9%,Unconfoundedness given the analyst covariates; correctly specified outcome model.
+womens_vs_control,C,visit,IPW (ATE),ATE,5.93 pp,"[4.95, 6.92]",+31.8% *,12%,Unconfoundedness; positivity for both arms; correctly specified propensity model.
+womens_vs_control,C,visit,"AIPW (linear, cross-fitted)",ATE,5.93 pp,"[4.95, 6.90]",+32.0% *,12%,Unconfoundedness; positivity; at least one of the propensity and outcome models correct.
+womens_vs_control,C,visit,DML (gradient boosting),ATE,5.87 pp,"[4.88, 6.86]",+28.6% *,24%,Unconfoundedness; positivity; nuisance learners converge fast enough (o(n^-1/4)) under cross-fitting.
+womens_vs_control,C,visit,IPW (ATT),ATT,5.84 pp,"[4.73, 6.95]",+33.9% *,18%,Unconfoundedness for controls; controls overlap the treated; correct propensity model.
+womens_vs_control,C,visit,1:1 NN matching (ATT),ATT,5.88 pp,"[4.84, 6.92]",+38.6% *,6%,Unconfoundedness; treated units have close controls; unmatched treated change the estimand to the ATT among matched treated.

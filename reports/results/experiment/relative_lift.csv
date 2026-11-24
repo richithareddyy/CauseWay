@@ -1,0 +1,10 @@
+contrast,role,treatment_arm,control_arm,estimand,n_treated,n_control,outcome,control_mean,relative_lift,ci_low,ci_high,interval
+mens_vs_control,co-primary,Mens E-Mail,No E-Mail,ITT effect of assignment,21307,21306,spend,0.6527893551112361,1.1792887703620063,0.6238006880432273,1.9509948178556211,bootstrap percentile
+mens_vs_control,co-primary,Mens E-Mail,No E-Mail,ITT effect of assignment,21307,21306,visit,0.10616727682343002,0.721404616781399,0.640303653880595,0.804610163859377,bootstrap percentile
+mens_vs_control,co-primary,Mens E-Mail,No E-Mail,ITT effect of assignment,21307,21306,conversion,0.005726086548390125,1.188421876286328,0.7752789958801045,1.7279646827256399,bootstrap percentile
+womens_vs_control,co-primary,Womens E-Mail,No E-Mail,ITT effect of assignment,21387,21306,spend,0.6527893551112361,0.6501518638646863,0.22446650334328494,1.2572607700623009,bootstrap percentile
+womens_vs_control,co-primary,Womens E-Mail,No E-Mail,ITT effect of assignment,21387,21306,visit,0.10616727682343002,0.4260550702669102,0.35658105863777134,0.5005457259588075,bootstrap percentile
+womens_vs_control,co-primary,Womens E-Mail,No E-Mail,ITT effect of assignment,21387,21306,conversion,0.005726086548390125,0.5433130436982172,0.2277141511441772,0.9391331392497394,bootstrap percentile
+mens_vs_womens,secondary,Mens E-Mail,Womens E-Mail,ITT effect of assignment,21307,21387,spend,1.0772015710478329,0.32065952115344803,0.030973580566602897,0.7153676999913301,bootstrap percentile
+mens_vs_womens,secondary,Mens E-Mail,Womens E-Mail,ITT effect of assignment,21307,21387,visit,0.151400383410483,0.20710949574984452,0.15625984219980582,0.2595715506797655,bootstrap percentile
+mens_vs_womens,secondary,Mens E-Mail,Womens E-Mail,ITT effect of assignment,21307,21387,conversion,0.008837144059475383,0.4180025790764045,0.18250366022514322,0.7105505663787564,bootstrap percentile

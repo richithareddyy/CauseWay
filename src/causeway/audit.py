@@ -305,6 +305,13 @@ def check_estimator_table(e: Evidence) -> None:
         )
 
 
+def published_commits(e: Evidence) -> tuple[str, str]:
+    """The commit the published run was stamped with, and the public commit with the same files."""
+    match = re.search(r"`([0-9a-f]{7})` has exactly the same files as `([0-9a-f]{7})`", e.design)
+    require("published commit recorded", match is not None)
+    return match.groups()
+
+
 # Claims
 
 
@@ -653,9 +660,7 @@ def readme_claims(e: Evidence) -> list[Claim]:
     criteo = e.configs["criteo"]["source"]["name"]
     require("extension dataset", criteo.startswith("Criteo Uplift"))
     version = re.search(r"v\d+\.\d+", criteo).group(0)
-    stamp = e.provenance["experiment"]["code"]["commit"][:7]
-    public = re.search(rf"`{stamp}` has exactly the same files as `([0-9a-f]{{7}})`", e.design)
-    require("published commit recorded", public is not None)
+    stamp, public = published_commits(e)
     terms = re.match(r"CC BY-NC-SA \d\.\d", e.configs["criteo"]["source"]["license"])
     require("extension data terms", terms is not None)
     hillstrom = e.configs["data"]["dataset"]
@@ -684,9 +689,12 @@ def readme_claims(e: Evidence) -> list[Claim]:
         Claim(f"![Experimental effects with {level} intervals]", "configs/experiment.toml"),
         Claim(f"(Criteo Uplift {version})", "configs/extension/criteo_gate.toml"),
         Claim(f"with Python {python} installed:", "pyproject.toml"),
-        Claim(f"Those results are stamped with commit `{stamp}`,", "provenance.json"),
         Claim(
-            f"Its files are identical to those at `{public.group(1)}`,",
+            f"The published results are stamped with commit `{stamp}`,",
+            "provenance.json as committed; docs/design.md, Section 7 item 16",
+        ),
+        Claim(
+            f"Its files are identical to those at `{public}`,",
             "docs/design.md, Section 7 item 16 (a recorded statement; the older commit is not public)",
         ),
         Claim(f"([Hillstrom, {year}]({hillstrom['documentation_url']}))", "configs/data.toml"),
@@ -750,13 +758,19 @@ def main() -> int:
     except AuditError as error:
         print(f"Audit failed: {error}")
         return 1
+    evidence = load(args.root)
     if args.list:
-        evidence = load(args.root)
         for name, build in (("README.md", readme_claims), ("docs/findings.md", findings_claims)):
             for claim in build(evidence):
                 print(f"{name}\t{claim.source}\t{claim.text}")
     totals = "; ".join(f"{name}: {count} numbers" for name, count in checked.items())
     print(f"Audit passed against {len(COMMITTED)} committed files. {totals}.")
+    current, (published, _) = (
+        evidence.provenance[SOURCES[0]]["code"]["commit"][:7],
+        published_commits(evidence),
+    )
+    if current != published:
+        print(f"Note: these tables come from a rerun at {current}, not the published run at {published}.")
     return 0
 
 

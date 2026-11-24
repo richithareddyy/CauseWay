@@ -30,6 +30,35 @@ def test_audit_passes_on_committed_files_without_raw_data(saved_study):
     assert not (saved_study / "data").exists()
 
 
+def test_a_rerun_at_another_commit_still_passes_and_is_reported(saved_study, capsys, monkeypatch):
+    stamp = "1234567" + "0" * 33
+    for source in audit.SOURCES:
+        path = saved_study / f"reports/results/{source}/provenance.json"
+        record = json.loads(path.read_text())
+        record["code"]["commit"] = stamp
+        path.write_text(json.dumps(record))
+    findings = saved_study / "docs/findings.md"
+    with pytest.raises(audit.AuditError, match="findings"):  # until the report is rendered again
+        audit.run(saved_study)
+    findings.write_text(re.sub(r"- Code `[0-9a-f]{7}`\.", f"- Code `{stamp[:7]}`.", findings.read_text()))
+    monkeypatch.setattr("sys.argv", ["audit", "--root", str(saved_study)])
+    assert audit.main() == 0
+    assert f"rerun at {stamp[:7]}" in capsys.readouterr().out
+
+
+def test_committed_results_carry_the_published_stamp():
+    """Read from the commit itself, so a local rerun does not matter but committing one would."""
+    published, _ = audit.published_commits(audit.load(PROJECT_ROOT))
+    for source in audit.SOURCES:
+        name = f"HEAD:reports/results/{source}/provenance.json"
+        shown = subprocess.run(
+            ["git", "show", name], cwd=PROJECT_ROOT, capture_output=True, text=True, check=False
+        )
+        if shown.returncode:
+            pytest.skip("not a git checkout")
+        assert json.loads(shown.stdout)["code"]["commit"].startswith(published)
+
+
 @pytest.mark.parametrize("name", DOCUMENTS)
 def test_changing_any_single_number_is_caught(name):
     text = (PROJECT_ROOT / name).read_text()

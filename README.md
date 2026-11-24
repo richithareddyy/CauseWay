@@ -37,7 +37,7 @@ make analysis
 make docs
 ```
 
-A rerun stamps the committed tables with the current commit, so `make verify` and its tests then report a mismatch with the commit named below. `git restore reports docs` returns to the published run.
+A rerun stamps the tables with the current commit. `make verify` still checks every number and notes that they come from a rerun; `git restore reports docs` returns to the published run.
 
 The extension needs a manual download: put the file named in [`configs/extension/criteo_gate.toml`](configs/extension/criteo_gate.toml) into `data/raw/criteo/`, then run:
 
@@ -48,7 +48,7 @@ make extension
 
 The aggregate tables behind the numbers here and in the findings report are committed under [`reports/results/`](reports/results); after `make setup`, `make verify` checks each number against the committed files without rerunning anything. It does not cover the extension, whose tables are not committed.
 
-Those results are stamped with commit `0fe84ed`, a hash from before the public history was rewritten. Its files are identical to those at `73e57c8`, so the results come from the code there.
+The published results are stamped with commit `0fe84ed`, a hash from before the public history was rewritten. Its files are identical to those at `73e57c8`, so the results come from the code there.
 
 The full analysis took about 75 minutes on eight cores in the documented run. That was an earlier timed run, not the run behind the committed tables, and it excludes the extension. Dataset files are checksum-verified before use; configurations fix the benchmark design and random seeds. Each analysis records its data checksums, code commit, and package versions, and either the benchmark specification or its plan version; the robustness plan itself is not recorded.
 

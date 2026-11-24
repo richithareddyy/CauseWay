@@ -36,4 +36,11 @@ The full analysis took about 75 minutes on eight cores in the documented run. Da
 
 The comparison includes matching, weighting, regression, AIPW, and double machine learning (DML). The AIPW and DML calculations are implemented here and checked against EconML and DoubleML. Analysis plans were committed before the corresponding analyses were run; commit order records that sequence but cannot prove what had been inspected. The targeting policies are evaluated on data, not deployed campaigns.
 
+## Data and licenses
+
+The code is released under the [MIT License](LICENSE), which does not cover either dataset. No raw data is stored or redistributed here.
+
+- **Hillstrom e-mail experiment** ([Hillstrom, 2008](https://blog.minethatdata.com/2008/03/minethatdata-e-mail-analytics-and-data.html)): neither the publisher's post nor the file states a license or terms of use. `make data` downloads it from the publisher, or from a public mirror if that is unavailable.
+- **Criteo Uplift v2.1** ([Criteo AI Lab](https://huggingface.co/datasets/criteo/criteo-uplift)), used only by the extension: CC BY-NC-SA 4.0, which requires attribution, allows non-commercial use only, and applies the same license to adaptations. It has to be downloaded separately.
+
 [Research design](docs/design.md) · [Results](docs/findings.md) · [Setup and technical details](GUIDE.md)

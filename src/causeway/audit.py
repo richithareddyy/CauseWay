@@ -648,6 +648,11 @@ def readme_claims(e: Evidence) -> list[Claim]:
     criteo = e.configs["criteo"]["source"]["name"]
     require("extension dataset", criteo.startswith("Criteo Uplift"))
     version = re.search(r"v\d+\.\d+", criteo).group(0)
+    terms = re.match(r"CC BY-NC-SA \d\.\d", e.configs["criteo"]["source"]["license"])
+    require("extension data terms", terms is not None)
+    hillstrom = e.configs["data"]["dataset"]
+    year = re.search(r"\((\d{4})\)", hillstrom["name"]).group(1)
+    require("dataset terms documented", "Neither the blog post nor the file states a license" in e.design)
 
     def biased(table: pd.DataFrame) -> pd.Series:
         return table["bias"].abs() > 2 * table["bias_mc_se"]
@@ -671,6 +676,12 @@ def readme_claims(e: Evidence) -> list[Claim]:
         Claim(f"![Experimental effects with {level} intervals]", "configs/experiment.toml"),
         Claim(f"(Criteo Uplift {version})", "configs/extension/criteo_gate.toml"),
         Claim(f"with Python {python} installed:", "pyproject.toml"),
+        Claim(f"([Hillstrom, {year}]({hillstrom['documentation_url']}))", "configs/data.toml"),
+        Claim(
+            f"**Criteo Uplift {version}** ([Criteo AI Lab]({e.configs['criteo']['source']['repository']}))",
+            "configs/extension/criteo_gate.toml",
+        ),
+        Claim(f"used only by the extension: {terms.group(0)},", "configs/extension/criteo_gate.toml"),
         Claim(
             f"The full analysis took about {timing.group(1)} minutes on {WORDS[int(timing.group(2))]} cores "
             "in the documented run.",

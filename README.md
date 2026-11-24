@@ -4,39 +4,64 @@ A company emails its best customers and sees them spend more. Did the email caus
 
 The study uses the Hillstrom experiment, with 64,000 customers. It first estimates the effect of assigning customers to each email campaign. It then selects biased subsets using a known sampling rule and checks how closely different methods recover the experimental estimate.
 
-Python 3.12, pandas, scikit-learn, EconML, DoubleML.
+Python 3.12, pandas, scikit-learn, EconML, DoubleML. Also NumPy, SciPy, statsmodels, and Matplotlib.
 
 ## Main findings
 
 - Assignment to the Mens email increased two-week spending by about $0.77 per customer; the Womens email increased it by about $0.42.
-- When the variables responsible for selection are available, weighting and AIPW—a method combining outcome and treatment models—recover the benchmark within the uncertainty from repeated sampling.
-- When one of those variables is hidden, every tested method remains biased, even when diagnostic checks pass.
+- When the variables responsible for selection are available, weighting and AIPW—a method combining outcome and treatment models—recover the benchmark within the uncertainty from repeated sampling. This is a favorable case: their propensity model contains the true selection rule. Matching misses the benchmark in every case and linear outcome regression in nearly every case; DML misses it in isolated cases.
+- When one of those variables is hidden, every feasible method remains biased, while the refutation tests and the balance of the visible variables look much as they did before.
+- The effect varies detectably between customers only for visits under the Womens email. Choosing each customer's email with a model does not detectably beat sending everyone the Mens email.
 
 ![Experimental effects with 95% intervals](docs/figures/itt_effects.png)
 
-A separately versioned [validation extension](docs/extension.md) repeats the selection experiments on a second randomized trial (Criteo Uplift v2.1). The construction checks out and hiding a selection variable again biases every adjusted estimate, but small treatment–feature imbalance in that released file makes its unadjusted reference for visits itself uncertain.
+A separately versioned [validation extension](docs/extension.md) applies new selection rules to a second randomized dataset (Criteo Uplift v2.1), which pools several advertising tests. Estimators given the true selection rule show no detectable bias. Nonlinear selection breaks the linear-propensity weighting and AIPW estimates for visits. Hiding a selection variable shifts every reported adjusted estimate for visits, a comparison added after the frozen run had been read. Treatment in the released file is slightly predictable from the features, and adjusting for them moves the reference effect for visits, so which estimators count as biased there depends on the reference: with the variable hidden, weighting and AIPW match the unadjusted one.
 
 The [findings report](docs/findings.md) contains intervals, estimator comparisons, sensitivity checks, and qualifications. These findings concern this experiment and the constructed selection scenarios, not a general ranking of causal methods.
 
 ## Reproduce
 
-From the repository root, with Python 3.12 installed:
+To check the published results, from the repository root, with Python 3.12 installed:
 
 ```bash
 make setup
-make data
-make analysis
-make docs
+make verify
 make test
 ```
 
-The aggregate tables behind the numbers here and in the findings report are committed under [`reports/results/`](reports/results); after `make setup`, `make verify` checks each number against the committed files without rerunning anything.
+To rerun the analysis from the raw data:
+
+```bash
+make data
+make analysis
+make docs
+```
+
+A rerun stamps the committed tables with the current commit, so `make verify` and its tests then report a mismatch with the commit named below. `git restore reports docs` returns to the published run.
+
+The extension needs a manual download: put the file named in [`configs/extension/criteo_gate.toml`](configs/extension/criteo_gate.toml) into `data/raw/criteo/`, then run:
+
+```bash
+make extension-data
+make extension
+```
+
+The aggregate tables behind the numbers here and in the findings report are committed under [`reports/results/`](reports/results); after `make setup`, `make verify` checks each number against the committed files without rerunning anything. It does not cover the extension, whose tables are not committed.
 
 Those results are stamped with commit `0fe84ed`, a hash from before the public history was rewritten. Its files are identical to those at `73e57c8`, so the results come from the code there.
 
-The full analysis took about 75 minutes on eight cores in the documented run. Data downloads are checksum-verified; configurations fix the benchmark design and random seeds. Generated reports record the data, configuration, and environment used.
+The full analysis took about 75 minutes on eight cores in the documented run. That was an earlier timed run, not the run behind the committed tables, and it excludes the extension. Dataset files are checksum-verified before use; configurations fix the benchmark design and random seeds. Each analysis records its data checksums, code commit, and package versions, and either the benchmark specification or its plan version; the robustness plan itself is not recorded.
 
-The comparison includes matching, weighting, regression, AIPW, and double machine learning (DML). The AIPW and DML calculations are implemented here and checked against EconML and DoubleML. Analysis plans were committed before the corresponding analyses were run; commit order records that sequence but cannot prove what had been inspected. The targeting policies are evaluated on data, not deployed campaigns.
+The comparison includes matching, weighting, regression, AIPW, and double machine learning (DML). The AIPW estimates are implemented here and checked against EconML. The DML estimates come from DoubleML and are checked against a score written here. Both checks use the first draws of each scenario. The plans for the benchmark, heterogeneity, robustness, and extension analyses were committed before the code that runs them; the experiment's plan file was committed together with its analysis, after the design record it encodes. Commit order records that sequence but cannot prove what had been inspected. The targeting policies are evaluated on data, not deployed campaigns.
+
+CI runs linting, a dependency check, an import check, and the tests on every push to `main` and on pull requests.
+
+## Limitations
+
+- The effects are of being assigned an email. Receiving or opening it was not recorded.
+- The Hillstrom data come from a single experiment, with a short outcome window and no cost or margin data.
+- The biased samples use selection rules chosen in advance. Recovering the estimate there does not show that a method identifies effects in other observational data.
+- The experimental estimate used as the benchmark has its own sampling uncertainty.
 
 ## Data and licenses
 

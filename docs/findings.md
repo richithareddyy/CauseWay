@@ -1,6 +1,6 @@
 # Causeway: findings
 
-> Copied from `reports/results/findings/findings_report.md` by `make docs`. Figures marked as paths and every result table are produced locally by `make analysis`.
+> Copied from `reports/results/findings/findings_report.md` by `make docs`. Figures marked as paths and every result table are produced locally by `make analysis`. The aggregate tables behind these numbers are committed under `reports/results/`, and `make verify` checks each number against them.
 
 Does assigning a customer to a marketing e-mail make them spend more, or are the customers who get promotions simply the ones who would have bought anyway? This report gathers the answers from every stage of the analysis. Every number is read from the saved result tables.
 
